@@ -1,0 +1,15 @@
+schema: ekk.realm/0.1
+id: urn:uuid:cbba25b4-f06b-5155-8134-8884aa974124
+name: public-ekk-example
+owner: principal:example-owner
+default_context: urn:uuid:99ff0e18-68f1-5fee-ba64-286f41684ec3
+default_classification: public
+storage:
+  mode: git-files
+  record_roots:
+  - contexts
+  - records
+  source_root: sources
+  receipts_root: governance/receipts
+publication:
+  mode: disabled-until-explicit-export

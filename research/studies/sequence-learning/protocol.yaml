@@ -1,0 +1,57 @@
+schema: ekk.study/0.1
+id: sequence-learning
+status: not_run
+title: Fixed-model learning across product change sequences
+hypothesis: Persistent provenance and method revision may improve work across comparable task sequences.
+hypothesis_history: knowledge realm question/claim reference must be pinned before execution
+arms:
+  - id: documentation
+    intervention: Ordinary versioned documentation; no additional retrieval memory or evolution loop.
+  - id: retrieval
+    intervention: Same starting documentation plus persistent retrieval memory.
+  - id: provenance_review
+    intervention: Retrieval plus pinned decision bases, explicit expectations and selective revisitation.
+  - id: full_evolution
+    intervention: Provenance and review plus controlled changes to methods, tools and checks, including removal.
+design:
+  unit: One complete matched product-change sequence on an isolated branch.
+  allocation: Randomize arm order within each matched sequence and seed; preserve identical starting states.
+  repetitions_per_arm: 3
+  task_sequences: null
+  model_version: null
+  model_parameters: null
+  tool_versions: null
+  engine_commit: null
+  pack_digests: null
+  seeds: [11, 29, 47]
+  preregistration: Freeze tasks, model, evaluator, budget and analysis before the first measured run.
+budget:
+  status: unset_no_run_authorized
+  total_currency_limit: null
+  total_wall_seconds: null
+  model_tokens_per_sequence: null
+  human_minutes_per_sequence: null
+  includes: [task_execution, knowledge_maintenance, reviews, experiments, failed_interventions, retries, evaluator_execution, human_participation]
+  stopping: Do not start without finite approved limits; stop at the first exhausted full-lifecycle limit and report incomplete runs.
+evaluator:
+  version: null
+  digest: null
+  authority: Evaluator owner or protected CI process outside candidate write authority.
+  held_out_boundary: Held-out tasks and protected tests remain outside mutable memory and candidate-visible training material until the corresponding measurement ends.
+  candidate_changes: Candidates may change their own code and methods, not baseline evaluator, success criteria or acceptance authority.
+  evaluator_changes: Separate versioned proposal and comparison; never retroactive replacement for an ongoing candidate run.
+metrics:
+  primary: Fraction of held-out product invariants satisfied per complete sequence.
+  secondary: [regressions, repeated_known_errors, unnecessary_interventions, total_lifecycle_cost, human_minutes, elapsed_seconds]
+analysis:
+  comparisons: Paired differences between arms on identical sequence and seed, reported with uncertainty and per-run data.
+  failures: Include negative, interrupted and budget-exhausted runs; do not silently discard them.
+  interpretation: No later-task speedup alone establishes learning; report task difficulty and all maintenance costs.
+  success_criterion: Before execution freeze a minimum meaningful primary improvement and maximum acceptable regression/cost bounds; unset bounds block a confirmatory claim.
+artifacts:
+  run_manifest: Exact input snapshots, versions, role grants, context manifests, budget ledger and evaluator digest.
+  report: Freeze a separate report for actual measured results; never overwrite the protocol with a success story.
+  privacy: Synthetic fixtures only unless publication authorization explicitly covers other evidence.
+limitations:
+  - Remote model version changes can prevent exact reproduction.
+  - Synthetic functional rehearsals do not establish empirical benefit or scientific priority.

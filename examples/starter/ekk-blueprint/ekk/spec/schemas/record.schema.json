@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EKK record envelope 0.1",
+  "type": "object",
+  "required": [
+    "schema",
+    "id",
+    "kind",
+    "title",
+    "scope",
+    "revision",
+    "created_at",
+    "created_by"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ekk.record/0.1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 512
+    },
+    "kind": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.-]*$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 512
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "classification": {
+      "type": "string",
+      "enum": [
+        "public",
+        "internal",
+        "private",
+        "restricted"
+      ]
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "rel",
+          "target"
+        ],
+        "properties": {
+          "rel": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 512
+          },
+          "realm": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 512
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "selector": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "context": {
+      "type": "object",
+      "required": [
+        "purpose"
+      ],
+      "properties": {
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "additionalProperties": true
+          },
+          "minItems": 1
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "assets"
+          ]
+        },
+        {
+          "required": [
+            "uri"
+          ]
+        }
+      ],
+      "additionalProperties": true
+    },
+    "review": {
+      "type": "object",
+      "properties": {
+        "due_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "when": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "context"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "context"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "source"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "source"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": true
+}

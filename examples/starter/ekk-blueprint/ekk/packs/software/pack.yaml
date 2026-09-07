@@ -1,0 +1,10 @@
+schema: ekk.pack/0.1
+id: ekk/software
+version: 0.1.0-design
+description: Работа с существующим продуктом
+requires_format:
+- ekk.record/0.1
+entrypoints:
+- METHOD.md
+installation_executes_code: false
+status: proposed-reference-method

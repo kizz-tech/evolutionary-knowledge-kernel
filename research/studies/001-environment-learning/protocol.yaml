@@ -1,0 +1,45 @@
+schema: ekk.study/0.1
+id: study-001-environment-learning
+status: designed_not_run
+question: "Улучшает ли постоянная эволюционирующая среда работу фиксированной модели на последовательности продуктовых изменений?"
+hypothesis_status: untested
+arms:
+  - id: docs
+    description: "Код и обычная документация"
+  - id: memory
+    description: "Тот же класс задач плюс сохраняемая память и retrieval"
+  - id: decisions
+    description: "Происхождение, ожидания решений и их пересмотр"
+  - id: environment
+    description: "Дополнительно изменения инструментов, правил и проверок"
+controls:
+  model_snapshot: must_be_recorded_before_run
+  provider_drift: report_if_snapshot_not_guaranteed
+  total_budget: must_be_fixed_before_run
+  task_sequences: matched_and_versioned
+  task_difficulty: control_and_report
+  environment_checkpoints: required
+  repeated_runs: sample_size_to_be_justified_before_execution
+  evaluator: outside_mutable_agent_workspace
+  held_out_answers: not_accessible_before_measurement
+cost_accounting:
+  include:
+    - task_execution
+    - context_construction
+    - memory_maintenance
+    - evolution_reviews
+    - unsuccessful_experiments
+    - human_review
+outcomes:
+  - verified_task_quality
+  - regressions
+  - recurrence_of_known_failure
+  - unnecessary_interventions
+  - total_cost
+  - human_involvement
+interpretation:
+  no_monotonic_improvement_assumption: true
+  no_claim_from_single_faster_later_task: true
+  publish_negative_results: true
+  separate_product_benefit_from_format_conformance: true
+results: null

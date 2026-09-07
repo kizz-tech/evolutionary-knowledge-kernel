@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.egg-info/
+.DS_Store
+.ekk-root
+/.local/
+/build/
+/dist/

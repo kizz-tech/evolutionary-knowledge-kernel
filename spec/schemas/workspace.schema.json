@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EKK workspace binding 0.1",
+  "type": "object",
+  "required": [
+    "schema",
+    "workspace_id",
+    "bindings"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ekk.workspace/0.1"
+    },
+    "workspace_id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 512
+    },
+    "bindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "realm_alias",
+          "realm_id",
+          "contexts"
+        ],
+        "properties": {
+          "realm_alias": {
+            "type": "string",
+            "minLength": 1
+          },
+          "realm_id": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 512
+          },
+          "contexts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512
+            },
+            "minItems": 1
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

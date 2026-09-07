@@ -1,0 +1,30 @@
+checked_at: '2026-09-07'
+sources:
+- id: prov
+  title: W3C PROV-DM
+  url: https://www.w3.org/TR/prov-dm/
+  scope_of_support: Происхождение, а не доказательство истины.
+- id: git-sparse
+  title: Git sparse-checkout
+  url: https://git-scm.com/docs/git-sparse-checkout.html
+  scope_of_support: Состав рабочего дерева, не ACL.
+- id: agents-md
+  title: OpenAI AGENTS.md
+  url: https://developers.openai.com/codex/guides/agents-md/
+  scope_of_support: Адаптер для конкретного клиента.
+- id: abac
+  title: NIST ABAC
+  url: https://csrc.nist.gov/Projects/attribute-based-access-control
+  scope_of_support: Субъект, объект, операция, условия.
+- id: dgm
+  title: Darwin Gödel Machine
+  url: https://arxiv.org/abs/2505.22954
+  scope_of_support: Ограниченные эксперименты self-improvement, не результаты EKK.
+- id: citation
+  title: GitHub citation files
+  url: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-citation-files
+  scope_of_support: Метаданные цитирования.
+- id: license
+  title: Apache License 2.0
+  url: https://www.apache.org/licenses/LICENSE-2.0
+  scope_of_support: Лицензия для выбора владельцем.

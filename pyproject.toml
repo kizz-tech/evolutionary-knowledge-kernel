@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evolutionary-knowledge-kernel"
+version = "0.4.0"
+description = "A local, provenance-aware semantic kernel with revisable commitments"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+readme = "README.md"
+dependencies = ["PyYAML>=6.0.2,<7", "jsonschema>=4.18,<5", "rfc3339-validator>=0.1.4,<1"]
+
+[project.scripts]
+ekk = "ekk.cli:main"
+
+[tool.setuptools]
+packages = ["ekk", "ekk.model", "ekk.application", "ekk.ports", "ekk.adapters", "ekk._schemas", "ekk._packs"]
+include-package-data = false
+
+[tool.setuptools.package-dir]
+ekk = "src/ekk"
+"ekk._schemas" = "spec/schemas"
+"ekk._packs" = "packs"
+
+[tool.setuptools.package-data]
+"ekk._schemas" = ["record.schema.json", "realm.schema.json", "receipt.schema.json", "workspace.schema.json"]
+"ekk._packs" = ["base/pack.yaml", "base/METHOD.md", "research/pack.yaml", "research/METHOD.md", "software/pack.yaml", "software/METHOD.md"]

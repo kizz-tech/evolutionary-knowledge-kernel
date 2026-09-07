@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EKK adoption receipt 0.1",
+  "type": "object",
+  "required": [
+    "schema",
+    "id",
+    "record_id",
+    "record_sha256",
+    "actor",
+    "adopted_at",
+    "governance_sha256",
+    "record_revision"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ekk.receipt/0.1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 512
+    },
+    "record_id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 512
+    },
+    "record_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "actor": {
+      "type": "string",
+      "minLength": 1
+    },
+    "adopted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "governance_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "record_revision": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "additionalProperties": true
+}

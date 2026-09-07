@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.coverage
+.cache/
+.local/
+.env
+.env.*
+!.env.example
+knowledge/views/
+research/runs/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

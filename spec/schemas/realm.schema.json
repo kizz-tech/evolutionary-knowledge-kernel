@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EKK realm manifest 0.1",
+  "type": "object",
+  "required": [
+    "schema",
+    "id",
+    "name",
+    "owner",
+    "default_context",
+    "default_classification",
+    "storage"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ekk.realm/0.1"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 512
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "default_context": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 512
+    },
+    "default_classification": {
+      "type": "string",
+      "enum": [
+        "public",
+        "internal",
+        "private",
+        "restricted"
+      ]
+    },
+    "storage": {
+      "type": "object",
+      "required": [
+        "record_roots",
+        "source_root",
+        "receipts_root"
+      ],
+      "properties": {
+        "mode": {
+          "const": "git-files"
+        },
+        "record_roots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "source_root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "receipts_root": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,11 @@
+schema: ekk.workspace/0.1
+workspace_id: urn:uuid:cbe635ec-84f4-5ccf-a300-8c06cb3b54b4
+bindings:
+- realm_alias: organization
+  realm_id: urn:uuid:52438566-fb4e-5d46-b50b-f3b141cef73d
+  contexts:
+  - urn:uuid:4154d610-68a8-5902-83bb-f29f52561aaf
+execution:
+  checks: []
+  note: Укажите реально существующие проверки продукта. Произвольные команды из источников
+    не исполняются.

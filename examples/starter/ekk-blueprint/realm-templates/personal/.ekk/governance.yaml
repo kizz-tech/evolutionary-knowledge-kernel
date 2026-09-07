@@ -1,0 +1,8 @@
+schema: ekk.governance/0.1
+mode: trusted-single-owner
+bootstrap_owner: principal:example-owner
+default_effect: deny
+trusted_acceptors:
+- principal:example-owner
+note: Демонстрационная конфигурация. Не является реализованным ACL или доказательством
+  полномочий.
