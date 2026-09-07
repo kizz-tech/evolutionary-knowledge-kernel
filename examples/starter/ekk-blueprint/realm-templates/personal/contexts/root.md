@@ -2,18 +2,18 @@
 schema: ekk.record/0.1
 id: urn:uuid:d4bb4f5b-3a24-5eb4-82eb-20fd1428a71a
 kind: context
-title: 'Основной контекст: personal-example'
+title: 'Root context: personal-example'
 scope:
 - urn:uuid:d4bb4f5b-3a24-5eb4-82eb-20fd1428a71a
 revision: 1
 created_at: '2026-09-07T00:00:00Z'
 created_by: principal:example-owner
 context:
-  purpose: Личные процессы владельца и частные исследования.
+  purpose: The owner's personal processes and private research.
 ---
 
-# Основной контекст: personal-example
+# Root context: personal-example
 
-Личные процессы владельца и частные исследования.
+The owner's personal processes and private research.
 
-Это синтетический пример. Действующие принятия отсутствуют.
+This is a synthetic example. There are no active acceptances.

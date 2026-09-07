@@ -1,7 +1,7 @@
 schema: ekk.pack/0.1
 id: ekk/base
-version: 0.1.0-design
-description: Базовая работа со знанием
+version: 0.1.0-design.en
+description: Basic knowledge work
 requires_format:
 - ekk.record/0.1
 entrypoints:

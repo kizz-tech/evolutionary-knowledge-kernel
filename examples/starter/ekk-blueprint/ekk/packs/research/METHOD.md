@@ -1,8 +1,8 @@
-# Исследовательский метод
+# Research method
 
-Формулировать вопрос и проверяемую гипотезу. Отделять внешний источник, вывод автора,
-локальную интерпретацию и принятое инженерное решение.
+Formulate a question and a testable hypothesis. Separate the external source, the author's conclusion,
+the local interpretation, and the accepted engineering decision.
 
-До измерения фиксировать сравнение, бюджет, критерий результата и исключения.
-Хранить отрицательные результаты. Не передавать held-out ответы в доступную агенту память.
-Считать полную стоимость обслуживания и эволюции среды. Не объявлять новизну без related work.
+Before measurement, record the comparison, budget, outcome criterion, and exclusions.
+Retain negative results. Do not put held-out answers in memory accessible to the agent.
+Account for the full cost of maintaining and evolving the environment. Do not claim novelty without related work.

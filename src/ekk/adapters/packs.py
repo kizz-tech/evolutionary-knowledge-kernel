@@ -1,4 +1,4 @@
-"""Read exact starter packs; deterministic directory artifact pins, no execution."""
+"""Read exact versioned pack artifacts; deterministic directory artifact pins, no execution."""
 from pathlib import Path
 import json
 from .markdown import MarkdownCodec

@@ -1,12 +1,12 @@
-# Подключение продукта к EKK
+# Connecting a product to EKK
 
-Прочитайте `.ekk/workspace.yaml`. Локальный профиль разрешает realm_alias в разрешённое
-хранилище или endpoint; в Git не хранится личный абсолютный путь и секреты.
+Read `.ekk/workspace.yaml`. The local profile resolves realm_alias to a permitted
+store or endpoint; personal absolute paths and secrets are not stored in Git.
 
-До работы найдите текущие ограничения выбранных contexts и их основания. Если CLI ещё
-не реализован, читайте привязанные файлы напрямую только в пределах разрешённого доступа.
-Не изображайте успешный вызов несуществующего `ekk context`.
+Before working, find the current constraints of the selected contexts and their grounds. If the CLI
+is not implemented yet, read the bound files directly only within permitted access.
+Do not pretend that a call to the nonexistent `ekk context` succeeded.
 
-Используйте существующие команды тестирования и deploy самого продукта.
-Не создавайте второй knowledge realm с копиями тех же действующих решений.
-Существенные новые сведения предлагайте владельцу исходного realm.
+Use the product's existing testing and deployment commands.
+Do not create a second knowledge realm with copies of the same active decisions.
+Propose significant new findings to the owner of the original realm.

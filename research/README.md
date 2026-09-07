@@ -1,17 +1,20 @@
-# Research
+# EKK research
 
-The primary [study protocol](studies/001-environment-learning/protocol.yaml) and
-[report](studies/001-environment-learning/report.md) are preserved as supplied.
-Status: **designed_not_run**. Model version, budgets, task sequences, repetition
-count, and evaluator setup must be frozen before execution.
+The active question is whether personal environments and shared work can retain,
+transfer and revise useful methods across participant, model and condition changes.
 
-The [concept](../docs/concept.md) explains the question and the four comparison
-conditions in English. [Sequence-learning](studies/sequence-learning/README.md)
-is supplemental design material, not a second completed study. The older
-protocol-v0.1 and replay code preserve earlier mechanics and do not define the
-current model experiment.
+[Human/shared/method transfer](studies/human-shared-method-transfer/README.md)
+is the current four-arm protocol and runnable validation harness. Its model-study
+status is `designed_not_run`; its freeze is unset. The method-transfer example
+in `examples/method_transfer.py` tests deterministic mechanisms, not productivity.
 
-[Implementation validation](../docs/release-validation.md) checks local runtime
-behavior, installation, and recovery. A local command/evaluator rehearsal does
-not measure model effectiveness. Runtime source and synthetic fixtures are public;
-private knowledge stores and operational evidence remain outside the release.
+Earlier protocols under `studies/001-environment-learning`, `studies/sequence-learning`,
+`protocol-v0.1.md` and `metrics-v0.3.md` are historical research designs retained to
+reconstruct the change in direction. Their wording does not supersede the active
+protocol, and their designed studies must not be reported as completed.
+`replay.py` invokes preserved historical semantics in a separate process; it never
+selects a retired writer for current work.
+
+Keep exact task/evaluator/protocol versions, whole-lifecycle costs, failures and
+negative transfer. Personal understanding is separate from agent execution. The
+user's purpose and authority remain external to the optimizer.

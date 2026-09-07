@@ -1,20 +1,20 @@
 # EKK: Evolutionary Knowledge Kernel
 
-**Статус: проектная спецификация и проверяемые файловые примеры.**
+**Status: design specification and verifiable file examples.**
 
-EKK разрабатывается как переносимая среда для сохранения оснований решений и пересмотра
-знаний, инструментов и процессов по наблюдаемым последствиям. Эффективность этой архитектуры
-ещё предстоит измерить.
+EKK is being designed as a portable environment for preserving the grounds for decisions and revising
+knowledge, tools, and processes based on observed consequences. The effectiveness of this architecture
+has yet to be measured.
 
-Сначала читайте `docs/architecture.ru.md`, `spec/contract.md`, затем `docs/implementation.ru.md`.
-Формат рассчитан на независимые realms, а не на общий каталог личных и корпоративных данных.
+Read `docs/architecture.md` and `spec/contract.md` first, then `docs/implementation.md`.
+The format is designed for independent realms, not a shared directory of personal and corporate data.
 
-В этой версии реализован только read-only валидатор примеров: `python tools/validate.py knowledge`.
-Продуктовый CLI `ekk` ещё не реализован. Инструкции не должны выдавать будущие команды за рабочие.
+This version implements only a read-only example validator: `python tools/validate.py knowledge`.
+The product CLI `ekk` is not implemented yet. Instructions must not present future commands as working ones.
 
-`knowledge/` содержит синтетический публичный начальный realm проекта.
-`research/` содержит методику, но не результаты исследования.
-`packs/` содержит проектные методы, которые не запускают код при чтении или установке.
+`knowledge/` contains a synthetic public starter realm for the project.
+`research/` contains methodology, but no research results.
+`packs/` contains proposed methods that do not execute code when read or installed.
 
-Нет автоматической передачи телеметрии, автоматического подключения персональных баз
-или предоставления модели доступа к другим realms.
+There is no automatic telemetry transmission, automatic connection of personal databases,
+or granting the model access to other realms.

@@ -2,7 +2,7 @@
 schema: ekk.record/0.1
 id: urn:uuid:ab88aabb-b9da-59c9-816b-f8c3e2bab315
 kind: observation
-title: Не найдено основание в учебном примере
+title: Grounds not found in a training example
 scope:
 - urn:uuid:4154d610-68a8-5902-83bb-f29f52561aaf
 revision: 1
@@ -14,10 +14,10 @@ relations:
   revision: 1
 ---
 
-# Наблюдение
+# Observation
 
-В исходном учебном материале описан неудачный поиск основания.
+The original training material describes an unsuccessful search for grounds.
 
-## Ограничения
+## Limitations
 
-Это не доказывает дефект архитектуры и не создаёт задачи на рефакторинг.
+This does not prove an architectural defect or create a refactoring task.

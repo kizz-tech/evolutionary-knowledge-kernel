@@ -1,7 +1,7 @@
 # organization-example
 
-Синтетический пример отдельного realm, не действующая база.
+A synthetic example of a separate realm, not an active database.
 
-Внутренний продукт и методы разработки организации.
+The organization's internal product and development methods.
 
-ID, владелец и правила подлежат замене при создании реальной установки.
+Replace the IDs, owner, and rules when creating a real installation.

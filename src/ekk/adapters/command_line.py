@@ -12,7 +12,7 @@ import uuid
 import yaml
 from .local_profile import LocalProfile, binding, config_home, data_home, trusted_principal, published_manifest
 
-OPERATIONS={'doctor','context','capture','propose','apply','review','export'}
+OPERATIONS={'doctor','context','capture','propose','apply','review','assurance','export'}
 
 
 def service(root, *, realm_id=None, allowed_scopes=None):
@@ -42,7 +42,7 @@ def service(root, *, realm_id=None, allowed_scopes=None):
 
 
 def parser():
-    p=argparse.ArgumentParser(prog='ekk',description='Local Markdown/Git knowledge environment')
+    p=argparse.ArgumentParser(prog='ekk',description='Personal work entry, shared continuity and revisable methods. Start with enter --task; methods: ekk method --help')
     p.add_argument('operation',choices=sorted(OPERATIONS|{'init','enter','recover'}))
     p.add_argument('--root',type=Path)
     p.add_argument('--profile',default=os.environ.get('EKK_PROFILE'))
@@ -52,6 +52,8 @@ def parser():
     p.add_argument('--stdin',action='store_true',help='Read JSON request from stdin')
     p.add_argument('--scope',action='append',default=[])
     p.add_argument('--task',default='')
+    p.add_argument('--personal',action='store_true',help='Include explicitly configured personal home on enter')
+    p.add_argument('--resume',help='Exact JSON reference with realm, id, revision and digest on enter')
     p.add_argument('--budget',type=int,default=16000)
     p.add_argument('--compact',action='store_true',help='Display enter/context without historical metadata duplication; command options only')
     p.add_argument('--file',type=Path)
@@ -106,6 +108,8 @@ def dispatch(args, request):
         if 'scopes' in request and request['scopes']!=request['target_scope']:raise ValueError('Conflicting scope declarations')
         request['scopes']=request['target_scope']
     if 'expected_snapshot' in request and op=='propose':request['base']=request['expected_snapshot']
+    if (args.personal or args.resume is not None or 'resume' in request or 'personal' in request) and op != 'enter':
+        raise ValueError('personal and resume are enter options only')
     if op=='init' and args.workspace:
         if not args.realm or not args.scope:raise ValueError('Workspace init requires --realm and --scope')
         profile=LocalProfile(args.profile);realm_path,realm_manifest=profile.resolve(args.realm)
@@ -126,10 +130,10 @@ def dispatch(args, request):
         app=service(args.root,realm_id=request.get('realm_id') or request.get('target_realm'))
         app.init(title=args.title or request.get('title','Knowledge'),realm_id=app.initial_realm_id,**{k:request[k] for k in ('context_title','owner','context_id','default_visibility','packs') if k in request})
         return {'status':'initialized','realm_id':app.initial_realm_id,'doctor':app.doctor()}
-    if op=='enter' and not args.root and not args.realm and binding(args.cwd) is None:
-        return {'status':'unbound','context':None,'instruction':'No access to a knowledge realm was inferred.'}
+    if op == 'enter' and (args.personal or args.resume is not None or 'resume' in request or 'personal' in request or (not args.root and not args.realm and binding(args.cwd) is None)):
+        return workspace_entry(args, request)
     routes=_routes(args)
-    if op not in {'enter','context','doctor','review'} and len(routes)!=1:
+    if op not in {'enter','context','doctor','review','assurance'} and len(routes)!=1:
         raise ValueError('Mutation/export requires one explicit realm')
     results=[]
     for route in routes:
@@ -144,8 +148,12 @@ def dispatch(args, request):
         if op in {'context','enter'}:
             result=app.context(scopes,task=request.get('task',args.task),budget=request.get('budget',args.budget))
             result['index']=cache_context(result)
+            if op == 'enter':
+                from ..application.workspace import work_view
+                result['work_view'] = work_view(result, method_availability(app, scopes))
         elif op=='doctor':result=app.doctor(revision=args.revision)
         elif op=='review':result=app.review(scopes)
+        elif op=='assurance':result=app.assurance(scopes)
         elif op=='capture':
             if args.file:
                 data=args.file.read_bytes();filename=args.file.name
@@ -293,3 +301,61 @@ def main(argv=None):
         output=result_envelope(request,args.operation,result,error=True) if common else result
         print(json.dumps(output,ensure_ascii=False),file=sys.stderr)
         return 2
+
+
+def workspace_entry(args, request):
+    from ..application.workspace import WorkspaceService, exact_reference
+    personal = request.get('personal', args.personal)
+    if type(personal) is not bool:
+        raise ValueError('personal must be boolean')
+    if args.resume is not None and 'resume' in request:
+        raise ValueError('Choose one resume reference')
+    resume = json.loads(args.resume, parse_constant=_invalid_json_constant) if args.resume is not None else request.get('resume')
+    if args.resume is not None or 'resume' in request:
+        resume = exact_reference(resume)
+    bound = bool(args.root or args.realm or binding(args.cwd) is not None)
+    routes = _routes(args) if bound else []
+    for route in routes:
+        route['owner_projection'] = 'shared'
+    if personal or not bound:
+        try:
+            profile = LocalProfile(args.profile)
+        except ValueError as exc:
+            if str(exc) != 'Role profile unavailable' or personal:
+                raise
+            profile = None
+        home = profile.home() if profile else None
+        if personal and home is None:
+            raise ValueError('Explicit personal home unavailable')
+        if home:
+            home['owner_projection'] = 'personal'
+            routes.append(home)
+    prepared = []
+    for route in routes:
+        scopes = request.get('scopes', route['scopes'])
+        if args.scope and not bound:
+            scopes = args.scope
+        if not set(scopes) <= set(route['scopes']):
+            raise ValueError('Scope outside resolved route')
+        app = service(route['path'], allowed_scopes=route['scopes'] or None)
+        manifest = app.codec.load_yaml(app.store.snapshot()['files']['.ekk/realm.yaml'])
+        if request.get('target_realm') and request['target_realm'] != manifest['id']:
+            raise ValueError('Request realm differs from resolved binding')
+        if request.get('workspace_id') and route['owner_projection'] == 'shared' and request['workspace_id'] != route.get('workspace_id'):
+            raise ValueError('Request workspace differs from resolved binding')
+        prepared.append({'realm_id': manifest['id'], 'realm_alias': route['alias'],
+                         'owner_projection': route['owner_projection'], 'scopes': scopes,
+                         'context': app.context, 'method_availability': method_availability(app, scopes)})
+    return WorkspaceService(lambda: prepared).start(
+        task=request.get('task', args.task), budget=request.get('budget', args.budget), resume=resume)
+
+
+def method_availability(app, scopes):
+    from .method_repository import RealmMethodRepository
+    def current(reference):
+        try:
+            repository = RealmMethodRepository(app, scopes=scopes, journal_root=data_home()/'method-proposals')
+            return repository.active(reference)
+        except (ValueError, KeyError, PermissionError):
+            return {'active': False}
+    return current

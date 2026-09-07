@@ -226,8 +226,9 @@ def plan_migration(source, routes, *, source_id, existing_ids=(), legacy_records
             title, legacy_kind = Path(relative).name, None
             if legacy:
                 metadata = legacy['metadata']
-                from ekk.kernel import parse_markdown
-                actual_metadata, actual_body = parse_markdown(raw.decode('utf-8'))
+                from .markdown import MarkdownCodec
+                decoded = MarkdownCodec().decode(raw, allow_aliases=True)
+                actual_metadata, actual_body = decoded['metadata'], decoded['body']
                 if actual_metadata != metadata or actual_body != legacy['body']:
                     raise MigrationError('Legacy wrapper differs from preserved source bytes')
                 body, title, legacy_kind = legacy['body'], metadata.get('title', title), metadata.get('kind')

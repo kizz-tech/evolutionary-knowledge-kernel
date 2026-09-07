@@ -146,3 +146,9 @@ class CurrentCliTests(unittest.TestCase):
         self.assertEqual(reference['revision'],record['metadata']['revision'])
         again=self.call(args,{'request_id':'source-ref','operation':'capture','payload':{'body':'source bytes','title':'Addressable'}})
         self.assertEqual(again,(code,data))
+
+    def test_assurance_is_available_through_current_cli(self):
+        code,result=self.call(['assurance','--root',str(self.realm),'--scope',self.scope])
+        self.assertEqual(code,0,result)
+        self.assertEqual(result['schema'],'ekk.assurance/0.1')
+        self.assertEqual(result['mutations'],0)

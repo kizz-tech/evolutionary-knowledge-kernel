@@ -1,13 +1,13 @@
-# Проверка подготовленного комплекта
+# Validation of the prepared kit
 
-Дата: 2026-09-07.
+Date: 2026-09-07.
 
-- Три демонстрационных realm прошли read-only структурную проверку.
-- В каждом проверены 4 записи и bytes одного синтетического источника.
-- 18 тестов `unittest` прошли. Проверяются IDs, ссылки, path traversal, symlinks,
-  YAML-дубликаты/aliases, версии, даты и привязка receipt к текущим bytes.
-- JSON и YAML файлы комплекта успешно разобраны.
+- Three demonstration realms passed read-only structural validation.
+- In each, 4 records and the bytes of one synthetic source were checked.
+- 18 `unittest` tests passed. They check IDs, references, path traversal, symlinks,
+  YAML duplicates/aliases, versions, dates, and receipt binding to the current bytes.
+- The kit's JSON and YAML files parsed successfully.
 
-Это не проверка полномочий, защиты корпоративных данных, полноты provenance,
-исторического version store, продуктивности, конкурентного runtime или миграции LIFEOS.
-Эти возможности ещё не реализованы. Настоящие источники пользователя не переносились.
+This does not validate authority, corporate data protection, provenance completeness,
+a historical version store, productivity, a concurrent runtime, or LIFEOS migration.
+These capabilities are not implemented yet. No real user sources were transferred.

@@ -4,5 +4,5 @@ bootstrap_owner: principal:example-owner
 default_effect: deny
 trusted_acceptors:
 - principal:example-owner
-note: Демонстрационная конфигурация. Не является реализованным ACL или доказательством
-  полномочий.
+note: Demonstration configuration. It is not an implemented ACL or evidence of
+  authority.

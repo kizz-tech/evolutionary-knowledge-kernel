@@ -1,13 +1,13 @@
-# Перед публичным выпуском
+# Before public release
 
-Подтвердить права на код и текст, выбранную лицензию и порядок корпоративных вкладов.
-После этого добавить настоящий LICENSE; для собственных материалов предложен Apache-2.0.
+Confirm rights to code and text, the chosen license, and the process for corporate contributions.
+Then add a real LICENSE; Apache-2.0 is proposed for original materials.
 
-Проверить всю публикуемую историю, fixtures, пути, логи, изображения и источники,
-а не только текущий diff. Приватные корпуса не должны когда-либо попадать в публичный Git.
+Review the entire history to be published, fixtures, paths, logs, images, and sources,
+not just the current diff. Private corpora must never enter public Git.
 
-Завершить CITATION.cff настоящими авторами и метаданными релиза. Не выдумывать DOI,
-ORCID, научную публикацию или ссылку на ещё не созданный репозиторий.
+Complete CITATION.cff with actual authors and release metadata. Do not invent a DOI,
+ORCID, research publication, or a link to a repository that has not been created yet.
 
-Публиковать отдельно: работающие возможности; спроектированные возможности;
-результаты экспериментов; ограничения и непроверенные гипотезы.
+Publish separately: working capabilities; designed capabilities;
+experimental results; limitations and untested hypotheses.

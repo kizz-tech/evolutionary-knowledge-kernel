@@ -1,4 +1,4 @@
-"""Проверки внешних инвариантов файлового профиля на синтетическом realm."""
+"""File-profile boundary invariant checks on a synthetic realm."""
 from pathlib import Path
 import hashlib
 import importlib.util
@@ -70,7 +70,7 @@ class FileContractTests(unittest.TestCase):
         self.edit('records/observation-example.md', lambda d: d['relations'][0].update(realm='other-realm',target='other-record'))
         r = self.result()
         self.assertTrue(r['structural_valid'], r)
-        self.assertTrue(any('внешняя ссылка' in w for w in r['warnings']))
+        self.assertTrue(any('external reference' in w for w in r['warnings']))
 
     def test_changed_source_bytes_are_rejected(self):
         asset=next((self.root/'sources').rglob('original.txt'))
@@ -103,7 +103,7 @@ class FileContractTests(unittest.TestCase):
         self.edit('records/observation-example.md', lambda d: d.update(kind='domain.custom'))
         r=self.result()
         self.assertTrue(r['structural_valid'], r)
-        self.assertTrue(any('Неизвестный kind' in w for w in r['warnings']))
+        self.assertTrue(any('Unknown kind' in w for w in r['warnings']))
 
     def test_current_adoption_is_bound_to_exact_bytes(self):
         self.add_receipt()
@@ -122,7 +122,7 @@ class FileContractTests(unittest.TestCase):
         self.edit('records/decision-example.md', lambda d: d.update(revision=2))
         r=self.result()
         self.assertTrue(r['structural_valid'],r)
-        self.assertTrue(any('исторический receipt' in w for w in r['warnings']))
+        self.assertTrue(any('historical receipt' in w for w in r['warnings']))
         self.assertEqual(r['current_receipt_content_bindings_verified'],0)
 
     def test_unsupported_schema_is_rejected(self):

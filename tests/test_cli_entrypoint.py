@@ -33,7 +33,7 @@ class EntrypointTests(unittest.TestCase):
             self.assertNotIn('project-bind', result.stdout)
         result = self.call('--version')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('0.4.0', result.stdout)
+        self.assertIn('0.5.0', result.stdout)
         self.assertIn('record format 0.1', result.stdout)
 
     def test_unbound_entry_uses_current_result_and_does_not_create_state(self):
@@ -70,10 +70,10 @@ class EntrypointTests(unittest.TestCase):
         self.assertEqual((realm / '.ekk/realm.yaml').read_bytes(), before)
         self.assertTrue(json.loads(self.call('doctor', '--root', realm).stdout)['ok'])
 
-    def test_legacy_help_remains_explicitly_available(self):
+    def test_legacy_commands_are_not_active_runtime_paths(self):
         result = self.call('--legacy-help')
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('project-bind', result.stdout)
+        self.assertEqual(result.returncode, 2)
+        self.assertNotIn('project-bind', result.stdout)
 
 
 if __name__ == '__main__':

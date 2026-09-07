@@ -73,6 +73,56 @@ class ApplicationTests(unittest.TestCase):
         self.assertEqual(result['candidates'][0]['detector'],'expired')
         self.assertEqual(len(result['unregistered_conditions']),1);self.assertEqual(result['mutations'],0)
 
+    def test_assurance_dimensions_are_independent(self):
+        evidence=self.meta('evidence','observation',observation={'subject':'scope','observed_at':'2026-09-07T10:00:00Z','aspects':['build']})
+        self.add(evidence,'synthetic evidence')
+        pinned={'id':'evidence','revision':1}
+        m=self.decision(assurance={
+            'evidence':{'status':'supported','basis':[pinned]},
+            'implementation':{'status':'verified','basis':[pinned]},
+        })
+        self.add(m,accept=['decision'])
+        item=self.app.assurance(['scope'])['items'][0]
+        self.assertEqual(item['owner_authorized']['status'],'accepted')
+        self.assertEqual(item['evidence_supported']['status'],'supported')
+        self.assertEqual(item['implementation_verified']['status'],'verified')
+        self.assertEqual(item['observed_benefit']['status'],'unknown')
+
+    def test_acceptance_alone_does_not_claim_evidence_or_benefit(self):
+        self.add(self.decision(),accept=['decision'])
+        item=self.app.assurance(['scope'])['items'][0]
+        self.assertEqual(item['owner_authorized']['status'],'accepted')
+        self.assertEqual(item['evidence_supported']['status'],'unknown')
+        self.assertEqual(item['implementation_verified']['status'],'not_run')
+        self.assertEqual(item['observed_benefit']['status'],'unknown')
+
+    def test_observation_gap_reports_missing_and_stale_aspects(self):
+        m=self.decision(review={'triggers':[{'detector':'observation_gap','aspects':['quality','regressions'],'max_age_days':2}]})
+        self.add(m,accept=['decision'])
+        old=self.meta('old-observation','observation',basis=m['basis'],observation={'subject':'decision','observed_at':'2026-09-01T10:00:00Z','aspects':['quality']})
+        self.add(old)
+        candidate=self.app.review(['scope'])['candidates'][0]
+        self.assertEqual(candidate['detector'],'observation_gap')
+        self.assertIn('unobserved aspects: regressions',candidate['reasons'])
+        self.assertIn('stale observations: quality',candidate['reasons'])
+
+    def test_recent_complete_observation_avoids_gap_candidate(self):
+        m=self.decision(review={'triggers':[{'detector':'observation_gap','aspects':['quality'],'max_age_days':2}]})
+        self.add(m,accept=['decision'])
+        observed=self.meta('recent-observation','observation',basis=m['basis'],observation={'subject':'decision','observed_at':'2026-09-07T10:00:00Z','aspects':['quality']})
+        self.add(observed)
+        self.assertEqual(self.app.review(['scope'])['candidates'],[])
+
+    def test_local_evolution_cannot_expand_and_explicit_needs_basis(self):
+        local=self.decision(evolution={'propagation':'local','origin_scopes':['other'],'applicability':'same component','rollback':'supersede this rule'})
+        with self.assertRaises(ValueError):self.add(local)
+        explicit={**local,'evolution':{'propagation':'explicit','origin_scopes':['scope'],'applicability':'named targets','rollback':'supersede this rule'}}
+        with self.assertRaises(ValueError):self.add(explicit)
+
+    def test_method_contract_requires_stops_and_autonomy_boundary(self):
+        incomplete=self.meta('method-record',method={'supported_work':['review'],'guaranteed_result':['report'],'checks':['schema'],'assumptions':['visible inputs']})
+        with self.assertRaises(ValueError):self.add(incomplete)
+
     def test_markdown_duplicate_keys_rejected(self):
         with self.assertRaises(ValueError):self.codec.decode(b'---\nid: a\nid: b\n---\n')
 
@@ -207,7 +257,7 @@ class ApplicationTests(unittest.TestCase):
         payload={p.relative_to(fixture).as_posix():p.read_bytes() for p in fixture.rglob('*') if p.is_file()}
         sha=digest(json.dumps({p:digest(raw) for p,raw in payload.items()},sort_keys=True,separators=(',',':')).encode())
         app=RealmService(self.store,'owner',codec=self.codec,pack_loader=lambda _id,_version:payload)
-        snap=self.store.snapshot();lock={'schema':'ekk.packs-lock/0.1','packages':[{'id':'ekk/base','version':'0.1.0-design','origin':'pack:ekk/base','sha256':sha}]}
+        snap=self.store.snapshot();lock={'schema':'ekk.packs-lock/0.1','packages':[{'id':'ekk/base','version':'0.1.0-design.en','origin':'pack:ekk/base','sha256':sha}]}
         app.configure({'.ekk/packs.lock.yaml':self.codec.dump_yaml(lock)},base=snap['revision'],idempotency_key='exact-pack')
         self.assertTrue(app.doctor()['ok'])
         payload['METHOD.md']+=b'\nchanged'
@@ -440,3 +490,50 @@ class ApplicationTests(unittest.TestCase):
         self.assertEqual(proposal['grounds'],[{'id':'evidence-identifier','revision':3}])
         self.assertEqual(proposal['impact'],{'files':['records/submitted-note.md'],'scopes':['scope'],'scopes_complete':True})
         self.assertIn('do not grant permissions',proposal['authority_note'])
+
+    def test_assurance_hidden_basis_is_unknown_and_cannot_be_accepted(self):
+        hidden=self.meta('hidden','context');hidden['scope']=['hidden'];self.add(hidden)
+        evidence=self.meta('secret-evidence');evidence['scope']=['hidden'];self.add(evidence)
+        m=self.decision(assurance={'benefit':{'status':'observed','basis':[{'id':'secret-evidence','revision':1}]}})
+        self.add(m)
+        snap=self.store.snapshot();policy=self.codec.load_yaml(snap['files']['.ekk/governance.yaml']);policy['version']=2
+        policy['grants'].append({'principal':'reader','actions':['read','accept'],'scopes':['scope']})
+        self.app.configure({'.ekk/governance.yaml':self.codec.dump_yaml(policy)},base=snap['revision'],idempotency_key='restricted-assurance')
+        reader=RealmService(self.store,'reader',codec=self.codec)
+        report=reader.assurance(['scope'])
+        self.assertEqual(report['items'][0]['observed_benefit']['status'],'unknown')
+        self.assertNotIn('secret-evidence',json.dumps(report))
+        self.assertNotIn('secret-evidence',json.dumps(reader.context(['scope'])))
+        with self.assertRaises(PermissionError):reader.apply(reader.propose({}),idempotency_key='hidden-assurance-adopt',accept=['decision'])
+
+    def test_observation_window_future_dates_and_string_trigger(self):
+        m=self.decision(review={'triggers':[{'detector':'observation_gap','aspects':['quality'],'max_age_days':2,'starts_at':'2026-09-08T00:00:00Z'}]})
+        self.add(m,accept=['decision'])
+        self.assertEqual(self.app.review(['scope'])['candidates'],[])
+        self.app.clock=lambda:'2026-09-09T00:00:00Z'
+        future=self.meta('future-observation','observation',basis=m['basis'],observation={'subject':'decision','observed_at':'2099-01-01T00:00:00Z','aspects':['quality']});self.add(future)
+        self.assertIn('unobserved aspects: quality',self.app.review(['scope'])['candidates'][0]['reasons'])
+        m['revision']=2;m['review']={'triggers':['observation_gap']};self.add(m,accept=['decision'])
+        self.assertEqual(self.app.review(['scope'])['unregistered_conditions'],[{'id':'decision','condition':'observation_gap'}])
+
+    def test_propagation_basis_requires_destination_actor_read_access(self):
+        hidden=self.meta('trial-scope','context');hidden['scope']=['trial-scope'];self.add(hidden)
+        trial=self.meta('trial');trial['scope']=['trial-scope'];self.add(trial)
+        m=self.decision(evolution={'propagation':'explicit','origin_scopes':['trial-scope'],'propagation_basis':[{'id':'trial','revision':1}],'applicability':'target scope only','rollback':'supersede with previous rule'})
+        self.add(m)
+        snap=self.store.snapshot();policy=self.codec.load_yaml(snap['files']['.ekk/governance.yaml']);policy['version']=2
+        policy['grants'].append({'principal':'adopter','actions':['read','accept'],'scopes':['scope']})
+        self.app.configure({'.ekk/governance.yaml':self.codec.dump_yaml(policy)},base=snap['revision'],idempotency_key='restricted-trial')
+        adopter=RealmService(self.store,'adopter',codec=self.codec)
+        with self.assertRaises(PermissionError):adopter.apply(adopter.propose({}),idempotency_key='hidden-trial-adopt',accept=['decision'])
+
+    def test_ungrounded_and_other_scope_observations_do_not_suppress_review(self):
+        m=self.decision(review={'triggers':[{'detector':'observation_gap','aspects':['quality'],'max_age_days':2}]})
+        self.add(m,accept=['decision'])
+        outside=self.meta('outside','context');outside['scope']=['outside'];self.add(outside)
+        for key,scope,basis in [('ungrounded','scope',[]),('other-writer','outside',m['basis'])]:
+            observation=self.meta(key,'observation',basis=basis,observation={'subject':'decision','observed_at':'2026-09-07T11:00:00Z','aspects':['quality']})
+            observation['scope']=[scope];self.add(observation)
+        self.assertIn('unobserved aspects: quality',self.app.review(['scope'])['candidates'][0]['reasons'])
+        good=self.meta('grounded','observation',basis=m['basis'],observation={'subject':'decision','observed_at':'2026-09-07T11:00:00Z','aspects':['quality']});self.add(good)
+        self.assertEqual(self.app.review(['scope'])['candidates'],[])

@@ -141,3 +141,27 @@ class LocalProfile:
             if len(scopes)!=len(set(scopes)):raise ValueError('Duplicate context IDs')
             routes.append({'alias':alias,'path':location,'manifest':manifest,'scopes':scopes})
         return root, document, routes
+
+    def home(self):
+        """Explicit optional personal route; no inferred realm and no creation."""
+        entry = self.document.get('home')
+        if entry is None:
+            return None
+        if not isinstance(entry, dict) or set(entry) != {'realm_alias', 'realm_id', 'contexts'}:
+            raise ValueError('home requires realm_alias, realm_id and contexts')
+        from ..model import validate_identifier
+        alias = entry['realm_alias']
+        if not isinstance(alias, str) or not alias:
+            raise ValueError('Invalid home realm alias')
+        validate_identifier(entry['realm_id'])
+        scopes = entry['contexts']
+        if not isinstance(scopes, list) or not scopes:
+            raise ValueError('Explicit home context IDs required')
+        for scope in scopes:
+            validate_identifier(scope)
+        if len(scopes) != len(set(scopes)):
+            raise ValueError('Duplicate home context IDs')
+        location, manifest = self.resolve(alias)
+        if manifest['id'] != entry['realm_id']:
+            raise ValueError('Home realm identity differs from registry')
+        return {'alias': alias, 'path': location, 'manifest': manifest, 'scopes': list(scopes)}

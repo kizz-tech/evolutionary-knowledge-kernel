@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ekk:schema:packs:0.1",
+  "title": "EKK packs 0.1",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "ekk.packs/0.1"
+    },
+    "packs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$"
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "required_semantics": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$"
+            },
+            "minItems": 0
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "digest"
+        ],
+        "additionalProperties": true
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "schema",
+    "packs"
+  ],
+  "additionalProperties": true
+}

@@ -1,6 +1,8 @@
-# Architecture 0.1: requirement → implementation → proof
+# Preserved foundation and current 0.5 implementation
 
-Exact architecture, contract, schemas and starter materials remain unchanged.
+The source Architecture 0.1 is preserved in v0.4.0. This edition translates its
+prose and starter fixtures into English; the four schemas remain unchanged.
+The product direction is defined in [final-architecture.md](final-architecture.md).
 Runtime status is separate: [public validation report](release-validation.md). Format conformance,
 local functional evidence and empirical effectiveness are different claims.
 
@@ -19,7 +21,7 @@ local functional evidence and empirical effectiveness are different claims.
 | 11 Work and outcomes | Registered commands and independent verifier; separate execution/retention/observed steps | Synthetic routing/execution tests, independent verifier, outcome reconciliation tests |
 | 12 Review | Registered due/expiry/changed-basis/failed-outcome signals; human conditions reported separately | Review regressions; zero mutation, no automatic task creation or scheduler |
 | 13 EKK self-change | Contained realm shares code history; evaluator/command files pinned; pure experiment orchestration | Contained-store and execution cases; same-user separation is not hostile-process sandbox |
-| 14 Research | Exact four-arm protocol plus supplemental sequence design; measured local process costs | Real four-process rehearsal only; empirical protocol remains not_run |
+| 14 Research | Current human/shared/method four-arm protocol; historical studies preserved separately | Two-participant deterministic method demo; empirical protocol remains designed_not_run |
 | 15 Migration | Full backup, owner-resolved map, immutable originals, forward revisions, restore, cutover | Source-preserving migration and restore checks; adoption remains separate; private migration records excluded |
 | 16 Implementation | Local runtime, package and data integration implemented | Full suite, starter tests, replay, fresh wheel install, synthetic restore and execution cases |
 | 17 Future backends | Ports allow replacing storage/transport with explicit identity-preserving migration | No deployed server/backend or future migration guarantee claimed without conformance tests |
@@ -29,3 +31,16 @@ local functional evidence and empirical effectiveness are different claims.
 Original starter tests are a separate suite under
 `examples/starter/ekk-blueprint/ekk/tests`. Runtime extensions do not replace the
 four supplied schemas. Publication uses Apache-2.0; empirical effectiveness remains untested.
+
+## Current product contracts
+
+| Contract | Implementation | Evidence |
+| --- | --- | --- |
+| Personal entry and exact resume | WorkspaceService and authorized profile home | Scoped historical focus and refusal tests; no inferred personality |
+| Shared continuity | Existing realm records and explicit owner exports | Fresh-process two-participant demonstration |
+| Method transfer and revision | MethodService, RealmMethodRepository and fixed host executor | Local acceptance, current basis, exact artifact, independent evidence and quarantine tests |
+| Unlearning | Adverse outcome, host quarantine, accepted retirement, forward revision | Demo retains old bytes and uses a replacement |
+| Research claims | Frozen four-arm observation validator | Incomplete or contaminated observations rejected; empirical study not run |
+
+Legacy runtime code lives under `archive/runtime-0.4`; it is absent from the
+installed package and ordinary CLI routing.

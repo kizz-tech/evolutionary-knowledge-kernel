@@ -1,11 +1,11 @@
-# Управление публичным проектом
+# Public project governance
 
-Проектный владелец и реальные сопровождающие определяются перед публичным релизом.
-Предложенный руководитель проекта: Максим. Эта запись не устанавливает прав на материалы работодателя.
+The project owner and actual maintainers are determined before the public release.
+Proposed project lead: Maxim. This record does not establish rights to an employer's materials.
 
-Обсуждать и предлагать изменения можно открыто. Принятие спецификации и выпуск версии
-осуществляются по явно выбранному процессу сопровождающих. Корпоративные правила нельзя
-изменять принятием upstream pull request: каждый realm выбирает версию и область применения.
+Changes may be discussed and proposed openly. Specification acceptance and version releases
+follow an explicitly chosen maintainer process. Corporate rules cannot
+be changed by accepting an upstream pull request: each realm chooses its version and scope of application.
 
-Демонстрационные receipts не являются реальными подтверждениями. Локальное редактирование
-файла с именем authority не предоставляет автору полномочий.
+Demonstration receipts are not real confirmations. Locally editing
+a file named authority does not grant its author authority.

@@ -1,14 +1,14 @@
-# Исследовательская работа
+# Research work
 
-`knowledge/` хранит вопросы, источники, выводы и решения о самом EKK.
-`studies/` хранит точные протоколы экспериментов, разрешённые manifests и зафиксированные отчёты.
-Повторять формулировку гипотезы во многих независимых документах не требуется: используйте ссылки.
+`knowledge/` stores questions, sources, conclusions, and decisions about EKK itself.
+`studies/` stores exact experiment protocols, permitted manifests, and recorded reports.
+There is no need to repeat the hypothesis in many independent documents: use references.
 
-Начальный протокол 001 находится в состоянии designed_not_run. Он не подтверждает
-эффективность предлагаемой архитектуры.
+Initial protocol 001 is in the designed_not_run state. It does not confirm
+the effectiveness of the proposed architecture.
 
-Raw runs располагаются вне публичного Git, пока не определены права и retention.
-Published results должны включать полную стоимость EKK, а не только самый удачный agent run.
+Raw runs stay outside public Git until rights and retention are determined.
+Published results must include the full cost of EKK, not just the most successful agent run.
 
-Использовать EKK для собственной разработки полезно как эксплуатационный опыт,
-но само по себе это не заменяет контрольную группу и независимую проверку эффекта.
+Using EKK for its own development provides useful operational experience,
+but this alone does not replace a control group and independent verification of the effect.

@@ -1,38 +1,52 @@
-# Повседневная работа с EKK 0.4
+# Working through the personal environment
 
-Опиши агенту задачу: «проверь основание этого решения», «сохрани значимый результат»
-или «помоги изменить продукт с учётом принятых ограничений». Агент связывает запрос
-с владельцем и проектом, получает контекст, выполняет разрешённую работу и сообщает,
-что действительно проверено и сохранено. Отдельная запись нужна для самостоятельно
-полезного знания; обычная правка может завершиться без неё.
+Start with `ekk enter --cwd <project> --task <intent> --compact`.
+[Quick entry](quickstart.md) describes the personal home, separate projection, and
+exact continuation. [Methods](methods.md) describes verification, application,
+transfer, and retirement of an outdated version. Neither entry nor reading creates
+a new commitment.
 
-Перед действием агент читает применимые ограничения и основания. При изменении
-решения сохраняется новая revision или явный преемник; старое принятие не переносится
-на новые bytes. Источник хранится отдельно от его интерпретации. Обнаруженный конфликт
-не разрешается правилом «последнее решение победило».
+The current low-level workflow for sources and records is preserved below.
 
-Ниже технический интерфейс для агента. Значения `CONTEXT_ID`, пути и ключи заменяются
-на фактические значения текущей разрешённой задачи; это не готовые данные пользователя.
+# Everyday work with EKK 0.5
+
+Describe the task to the agent: "check the grounds for this decision," "retain a
+significant result," or "help change the product in light of accepted constraints."
+The agent links the request to its owner and project, obtains context, performs
+authorized work, and reports what was actually verified and retained. A separate
+record is needed for knowledge that is useful on its own; an ordinary edit may
+finish without one.
+
+Before acting, the agent reads applicable constraints and grounds. Changing a
+decision preserves a new revision or an explicit successor; old acceptance does
+not carry over to new bytes. A source is stored separately from its interpretation.
+A detected conflict is not resolved by a "latest decision wins" rule.
+
+The technical interface for the agent follows. Replace `CONTEXT_ID`, paths, and
+keys with the actual values for the current authorized task; these are not
+ready-made user data.
 
 ```sh
-ekk context --profile personal --realm personal --scope CONTEXT_ID --task 'Проверить основание решения' --compact
-ekk capture --profile personal --realm personal --scope CONTEXT_ID --file /path/to/source.md --title 'Существенное наблюдение' --idempotency-key CAPTURE_REQUEST_ID
+ekk context --profile personal --realm personal --scope CONTEXT_ID --task 'Check the grounds for a decision' --compact
+ekk capture --profile personal --realm personal --scope CONTEXT_ID --file /path/to/source.md --title 'Significant observation' --idempotency-key CAPTURE_REQUEST_ID
 ```
 
-Для `enter` и `context` флаг `--compact` сокращает только исторические metadata
-и список пропущенных ID в отображении. Полные выбранные тела и признаки
-`blocked`/`incomplete`, полномочия и digest сохраняются. Это отдельная display-схема;
-повтори команду без флага для полного ответа. JSON/stdin-запросы поддерживают только
-полный ответ. Подробности — во [входе агента](agent-entry.md).
+For `enter` and `context`, `--compact` only shortens historical metadata and the
+list of omitted IDs in the display. Complete selected bodies and the
+`blocked`/`incomplete` indicators, authority, and digest are preserved. This is a
+separate display schema; repeat the command without the flag for the full response.
+JSON/stdin requests support only the full response. See [agent entry](agent-entry.md)
+for details.
 
-`capture` сохраняет точные bytes источника и применяет подготовленное изменение.
-Повтор той же операции использует тот же ключ; другое содержание требует другого
-запроса. Отсутствие ответа после сбоя не означает отсутствие выполненной записи.
+`capture` preserves the exact source bytes and applies the prepared change.
+Repeating the same operation uses the same key; different content requires a
+different request. A missing response after a failure does not mean that no write
+was completed.
 
-Для изменения записи агент готовит JSON-файл запроса к `propose`. `base` берётся
-из прочитанного опубликованного снимка, а `changes` содержит относительные пути и
-полные UTF-8 тексты записей с конвертом 0.1. Для бинарных bytes предусмотрен объект
-`{"base64": "..."}`; `null` означает удаление и требует соответствующей авторизации.
+To change a record, the agent prepares a JSON request file for `propose`. `base`
+comes from the published snapshot that was read, and `changes` contains relative
+paths and complete UTF-8 record texts with the 0.1 envelope. Binary bytes use a
+`{"base64": "..."}` object; `null` means deletion and requires appropriate authorization.
 
 ```json
 {
@@ -47,11 +61,11 @@ ekk capture --profile personal --realm personal --scope CONTEXT_ID --file /path/
 ekk propose --profile personal --realm personal --json /path/to/change-request.json
 ```
 
-Агент сохраняет полученный proposal как отдельный JSON-артефакт, проверяет изменение
-и применяет именно его. Прямой вывод `propose` содержит закодированные bytes;
-его не подменяют исходным текстовым запросом при передаче в `apply`.
+The agent saves the returned proposal as a separate JSON artifact, checks the
+change, and applies that exact proposal. Direct `propose` output contains encoded
+bytes; do not replace it with the original text request when passing it to `apply`.
 
-Для общего интерфейса запрос можно передать в конверте:
+For the common interface, the request can be passed in an envelope:
 
 ```json
 {
@@ -60,35 +74,36 @@ ekk propose --profile personal --realm personal --json /path/to/change-request.j
   "payload": {
     "base": "PUBLISHED_SNAPSHOT",
     "changes": {"records/RECORD_ID.md": "COMPLETE_RECORD_FRONTMATTER_AND_BODY"},
-    "explanation": "Причина предлагаемого изменения"
+    "explanation": "Reason for the proposed change"
   }
 }
 ```
 
-Тогда ответ имеет schema `ekk.result/0.1`: `request_id`, `operation`, `status`,
-`snapshot`, `data`, `source_references`, `incomplete`, `warnings` и `guarantees`.
-Сам proposal находится в `data`; именно его передают в `payload` общего запроса
-`apply`. Поля proposal `grounds`, `impact` и `explanation` описывают предложение,
-но не дают полномочий и не подтверждают принятие. Обычный запрос без общего конверта
-сохраняет прямой формат ответа. Статус `unbound` означает отсутствие разрешённой
-привязки и сопровождается `incomplete: true`.
+The response then has schema `ekk.result/0.1`: `request_id`, `operation`, `status`,
+`snapshot`, `data`, `source_references`, `incomplete`, `warnings`, and `guarantees`.
+The proposal itself is in `data`; pass that into the `payload` of the common
+`apply` request. The proposal fields `grounds`, `impact`, and `explanation`
+describe the proposal but do not grant authority or confirm acceptance. An ordinary
+request without the common envelope retains the direct response format. Status
+`unbound` means there is no authorized binding and is accompanied by `incomplete: true`.
 
 ```sh
 ekk apply --profile personal --realm personal --json /path/to/proposal.json --idempotency-key APPLY_REQUEST_ID
 ```
 
-Принятие управляющего решения дополнительно требует проверенных полномочий и
-соответствующего acceptance-запроса. Само применение заметки не делает её правилом.
-Если base устарел, агент перечитывает контекст и заново проверяет предложение;
-он не перезаписывает чужое изменение для устранения ошибки CAS.
+Acceptance of a governing decision additionally requires verified authority and
+the corresponding acceptance request. Applying a note does not itself make it a
+rule. If the base is stale, the agent rereads the context and rechecks the proposal;
+it does not overwrite someone else's change to eliminate a CAS error.
 
-После существенного результата агент связывает наблюдение с основанием и ожиданием,
-сохраняет реальные проверки и отдельно указывает неопределённость. `ekk review`
-помогает найти основания пересмотра, но не запускает рефакторинг автоматически.
-Неуспех и решение оставить всё как есть допустимы. Новые проверки или методы
-добавляются только при пользе, сопоставимой со стоимостью; ненужные можно удалить.
+After a significant result, the agent links the observation to its grounds and
+expectation, retains actual checks, and states uncertainty separately. `ekk review`
+helps find grounds for reconsideration but does not automatically start refactoring.
+Failure and a decision to leave things as they are are valid outcomes. New checks
+or methods are added only when their benefit is commensurate with their cost;
+unnecessary ones can be removed.
 
-Деплой, публикация и исполнение во внешних системах происходят штатными инструментами
-в рамках своей авторизации. Локальная проверка не доказывает производственный эффект.
-Исследовательские протоколы пока `not_run`; повседневное использование не заменяет
-контролируемого сравнения и полного учёта затрат.
+Deployment, publication, and execution in external systems use those systems'
+standard tools within their own authorization. Local verification does not prove
+a production effect. Research protocols remain `not_run`; everyday use does not
+replace controlled comparison and complete cost accounting.

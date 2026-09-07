@@ -1,73 +1,90 @@
 # Evolutionary Knowledge Kernel
 
-**A local knowledge environment for agents: keep sources, explain decisions, and revisit them when their grounds change.**
+**A personal way into work, shared continuity, and methods that can improve with experience.**
 
-EKK is an experimental Python runtime and an open research proposal. It stores
-source bytes separately from interpretations, links decisions to exact evidence,
-and returns scoped context for the next task. The model stays fixed; the working
-environment can change through reviewed records, methods, tools, and checks.
+Start from an intention: investigate a question, continue a change, or prepare a
+handoff. EKK returns authorized context, accepted commitments, results, questions
+and exact continuation references. Personal drafts stay with their owner; shared
+work can continue when its participants or agents change.
 
-**The hypothesis is untested:** can this evolving environment improve a fixed
-model's work across a sequence of product changes, after counting maintenance,
-failed experiments, and human review?
+The research focus is whether useful ways of working can **persist, transfer and
+be revised or retired**. More stored text is not itself an improvement. An
+accepted record is not an execution permit or proof that a person understands it.
 
-## Try it
+This English research preview is version **0.5.0**. Read the
+[release notes](docs/release-notes-0.5.md) for compatibility changes and
+[translation provenance](docs/runtime-starter-provenance.md) for preserved originals.
 
-Start with the [runnable quickstart](docs/quickstart.md). It creates an isolated
-example, captures a source, proposes and applies a change, and reads it back.
-Python 3.11+ and Git are required; no model API key is needed for the local demo.
-Then use the [agent integration guide](docs/agent-integration.md) with a project
-and knowledge owner you control.
+## Try the complete method cycle
 
-Runtime **0.4.0**, record format **0.1**, and method pack versions are independent.
-This is the first research prerelease, published by [Kizz](https://github.com/kizz-tech)
-under [Apache-2.0](LICENSE).
+From this checkout, with Python 3.11+ and Git:
 
-## What changes in everyday work
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install .
+.venv/bin/python examples/method_transfer.py
+```
 
-Suppose a team chose a cache because a measured request was too slow. A note that
-says “use a cache” loses the reason. EKK can retain the measurement as a source,
-the decision's expected effect, and a condition for reconsideration. When the
-request path changes, the next task can inspect that evidence and decide whether
-the cache is still useful. It can also conclude that no change is warranted.
+The disposable example uses two synthetic participants, private exploration and
+shared work. It evaluates a harmless handoff method, restores it in a fresh
+process, transfers exact authorized bytes, evaluates and admits it locally,
+observes an adverse case, quarantines and retires the old version, and verifies
+its replacement. It makes no model calls and sends nothing externally.
 
-The loop is: **context → authorized work → evidence → reviewed knowledge change
-→ later reconsideration**. Ordinary edits can produce zero new records.
-Writing a note does not accept a rule, deploy code, or prove an outcome.
+For an existing authorized project:
 
-| Available in the local runtime | Outside the current evidence |
-| --- | --- |
-| Exact source capture and stable references | Automatic truth or authority detection |
-| Scoped context, explicit conflicts and unknowns | Guaranteed agent compliance |
-| Proposals against a specific snapshot; Git writer with retry and recovery checks | Hosted service or multiuser access-control boundary |
-| Versioned decisions and verified acceptance receipts | Proven productivity gains or model learning |
-| Portable project bindings and local profiles | Background capture of every conversation |
+```sh
+ekk enter --cwd /path/to/project --task 'Continue the investigation' --compact
+```
 
-## Read and reproduce
+[Quickstart](docs/quickstart.md) explains personal home, explicit personal context,
+exact resume, and the CLI. [Method lifecycle](docs/methods.md) shows the public
+operations and their boundaries.
 
-- [Concept and research question](docs/concept.md)
-- [Current implementation evidence](docs/release-validation.md)
-- [Architecture coverage and limits](docs/runtime-architecture-coverage.md)
-- [Architecture, Russian original](docs/architecture.ru.md) and [file contract](spec/contract.md)
-- [Research protocol](research/studies/001-environment-learning/protocol.yaml): `designed_not_run`
-- [Release notes](docs/release-notes-0.4.md), [contributing](CONTRIBUTING.md), and [security boundary](SECURITY.md)
+## What the three parts do
 
-The exact supplied starter is preserved under `examples/starter/ekk-blueprint`.
-Its design-stage wording describes that historical artifact, not the current
-runtime. [Provenance](docs/runtime-starter-provenance.md) explains the boundary.
-The release export contains source code and synthetic examples; active knowledge
-stores, local profiles, runtime state, and development Git history are excluded.
+| Part | Responsibility | Owning state |
+| --- | --- | --- |
+| Personal entry | Start from intent, read private drafts, continue exact prior work | Explicit personal route and owner-held records |
+| Shared continuity | Preserve accepted results, commitments, grounds and continuation anchors | Project realm, Git and other owning systems |
+| Revisable methods | Evaluate, admit, use, transfer, reconsider and retire an exact method | Ordinary records and receipts; host-owned execution evidence |
+
+The local kernel retains stable IDs, exact source bytes, versions, provenance,
+controlled writes and acceptance receipts. The record format remains **0.1**.
+Runtime **0.5.0** has one active CLI; old runtimes are explicit historical replay
+artifacts outside the installed package. No company data is moved into personal
+storage by entry or this migration.
+
+The installed method adapter is deliberately small and read-only. EKK does not
+rebuild identity management, a task tracker or universal approvals. External
+execution, credentials, permissions and publication remain with their owning
+systems. Profiles select routes within a trusted local process; they are not an
+OS sandbox.
+
+## Evidence and research
+
+The deterministic demonstration tests mechanisms. It does **not** establish
+productivity gains, general transfer, model improvement or human understanding.
+The [active four-arm protocol](research/studies/human-shared-method-transfer/README.md)
+compares a strong baseline, personal-only, shared-only and combined environments.
+It counts the full lifecycle, including failed experiments, maintenance and human
+review. Its empirical status is **designed_not_run**.
+
+- [Current architecture](docs/final-architecture.md) and [concept](docs/concept.md)
+- [Agent entry](docs/agent-entry.md) and [integration](docs/agent-integration.md)
+- [Migration and validation](docs/release-validation.md)
+- [Security boundary](SECURITY.md) and [assurance](docs/behavior-assurance.md)
+- [Historical runtime](archive/runtime-0.4/README.md) and [starter translation provenance](docs/runtime-starter-provenance.md)
 
 ## Development checks
 
 ```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.lock
-.venv/bin/python -m pip install --no-deps -e .
 .venv/bin/python -m unittest discover -s tests -v
 .venv/bin/python -m unittest discover -s examples/starter/ekk-blueprint/ekk/tests -p test_files.py -v
 .venv/bin/python research/replay.py
+.venv/bin/python -m unittest discover -s research/studies/human-shared-method-transfer -p test_harness.py -v
 ```
 
-These commands test implementation behavior. They do not run the model study.
-See the validation report for the exact previously tested revision and limits.
+Apache-2.0. The public source-export path excludes active stores, personal
+profiles, operational evidence, private supplied research and development Git
+history. Preparing an export does not publish it.

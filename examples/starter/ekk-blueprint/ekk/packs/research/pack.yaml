@@ -1,7 +1,7 @@
 schema: ekk.pack/0.1
 id: ekk/research
-version: 0.1.0-design
-description: Исследование и проверка гипотез
+version: 0.1.0-design.en
+description: Research and hypothesis testing
 requires_format:
 - ekk.record/0.1
 entrypoints:

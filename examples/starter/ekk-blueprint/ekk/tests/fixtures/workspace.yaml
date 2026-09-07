@@ -7,5 +7,5 @@ bindings:
   - urn:uuid:4154d610-68a8-5902-83bb-f29f52561aaf
 execution:
   checks: []
-  note: Укажите реально существующие проверки продукта. Произвольные команды из источников
-    не исполняются.
+  note: Specify product checks that actually exist. Arbitrary commands from sources
+    are not executed.

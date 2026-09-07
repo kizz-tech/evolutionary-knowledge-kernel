@@ -1,2 +1,2 @@
-"""Evolutionary Knowledge Kernel: local semantic substrate."""
-__version__ = '0.4.0'
+"""EKK: personal entry, shared work continuity and revisable methods."""
+__version__ = '0.5.0'

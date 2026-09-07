@@ -81,7 +81,8 @@ class MigrationTests(unittest.TestCase):
 
     def test_legacy_all_immutable_revisions_asset_pins_and_partial_asset_map(self):
         from hashlib import sha256
-        from ekk.kernel import markdown
+        from ekk.adapters.markdown import MarkdownCodec
+        markdown = lambda metadata, body: MarkdownCodec().encode(metadata, body).decode()
         raw = b'Original human text\r\n'
         (self.source / 'asset.txt').write_bytes(raw)
         records = {}

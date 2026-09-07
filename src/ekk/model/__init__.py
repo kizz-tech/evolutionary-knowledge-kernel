@@ -149,6 +149,92 @@ def validate_envelope(metadata):
         if "when" in review:
             for condition in _array(review["when"], "review when"):
                 _text(condition, "review condition")
+        for trigger in review.get("triggers", []):
+            if isinstance(trigger, str):
+                continue
+            trigger = _mapping(trigger, "review trigger")
+            _text(trigger.get("detector"), "review detector")
+            if trigger.get("detector") == "observation_gap":
+                if "starts_at" in trigger:
+                    _timestamp(trigger["starts_at"], "observation starts_at")
+                for aspect in _array(trigger.get("aspects"), "observation aspects", nonempty=True):
+                    _text(aspect, "observation aspect")
+                if len(set(trigger["aspects"])) != len(trigger["aspects"]):
+                    raise ValidationError("observation aspects must be unique")
+                days = trigger.get("max_age_days")
+                if type(days) is not int or days < 1:
+                    raise ValidationError("observation max_age_days must be a positive integer")
+    if "observation" in metadata:
+        observation = _mapping(metadata["observation"], "observation")
+        validate_identifier(observation.get("subject"))
+        _timestamp(observation.get("observed_at"), "observation observed_at")
+        for aspect in _array(observation.get("aspects"), "observation aspects", nonempty=True):
+            _text(aspect, "observation aspect")
+        if len(set(observation["aspects"])) != len(observation["aspects"]):
+            raise ValidationError("observation aspects must be unique")
+    if "assurance" in metadata:
+        assurance = _mapping(metadata["assurance"], "assurance")
+        allowed = {
+            "evidence": {"supported", "unsupported", "unknown"},
+            "implementation": {"verified", "failed", "not_run", "unknown"},
+            "benefit": {"observed", "not_observed", "unknown"},
+        }
+        if set(assurance) - set(allowed):
+            raise ValidationError("Unknown assurance dimension")
+        for dimension, states in allowed.items():
+            if dimension not in assurance:
+                continue
+            assertion = _mapping(assurance[dimension], "assurance " + dimension)
+            if assertion.get("status") not in states:
+                raise ValidationError("Invalid assurance " + dimension + " status")
+            basis = _array(assertion.get("basis", []), "assurance " + dimension + " basis")
+            if assertion["status"] not in ("unknown", "not_run") and not basis:
+                raise ValidationError("Assurance " + dimension + " assertion requires pinned basis")
+            for ref in basis:
+                validate_reference(ref, pinned=True)
+    if "method_package" in metadata:
+        from .methods import validate_method, exact_reference
+        package = _mapping(metadata['method_package'], 'method package')
+        if package.get('schema') != 'ekk.method-package/0.1' or kind != 'note':
+            raise ValidationError('inert note method package required')
+        validate_method(package.get('spec'))
+        source = exact_reference(package.get('artifact_source'))
+        if source not in metadata.get('basis', []):
+            raise ValidationError('method artifact must be an explicit pinned basis')
+    if 'method_admission' in metadata:
+        from .methods import exact_reference
+        admission = _mapping(metadata['method_admission'], 'method admission')
+        if kind != 'decision' or admission.get('status') not in ('available', 'retired'):
+            raise ValidationError('method admission is a local decision')
+        exact_reference(admission.get('method'))
+        if admission['status'] == 'available':
+            exact_reference(admission.get('evaluation'))
+        if admission['method'] not in metadata.get('basis', []):
+            raise ValidationError('method admission requires exact method basis')
+    if "method" in metadata:
+        method = _mapping(metadata["method"], "method")
+        for field in ("supported_work", "guaranteed_result", "checks", "assumptions", "stop_conditions", "autonomy_boundary"):
+            values = _array(method.get(field), "method " + field, nonempty=True)
+            for value in values:
+                _text(value, "method " + field)
+    if "evolution" in metadata:
+        evolution = _mapping(metadata["evolution"], "evolution")
+        if kind not in ("decision", "policy"):
+            raise ValidationError("Only a decision or policy can describe rule evolution")
+        if evolution.get("propagation") not in ("local", "explicit"):
+            raise ValidationError("Evolution propagation must be local or explicit")
+        for field in ("applicability", "rollback"):
+            _text(evolution.get(field), "evolution " + field)
+        origin_scopes = _array(evolution.get("origin_scopes"), "evolution origin_scopes", nonempty=True)
+        for item in origin_scopes:
+            validate_identifier(item)
+        if evolution["propagation"] == "local" and not set(scope) <= set(origin_scopes):
+            raise ValidationError("Local evolution cannot expand beyond origin scopes")
+        propagation_basis = _array(evolution.get("propagation_basis", []), "evolution propagation basis")
+        if evolution["propagation"] == "explicit" and not propagation_basis:
+            raise ValidationError("Explicit propagation requires pinned basis")
+        for ref in propagation_basis:
+            validate_reference(ref, pinned=True)
     if metadata.get("requires"):
         raise ValidationError("Unsupported mandatory record semantics")
     return dict(metadata)

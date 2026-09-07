@@ -3,28 +3,28 @@ sources:
 - id: prov
   title: W3C PROV-DM
   url: https://www.w3.org/TR/prov-dm/
-  scope_of_support: Происхождение, а не доказательство истины.
+  scope_of_support: Provenance, not proof of truth.
 - id: git-sparse
   title: Git sparse-checkout
   url: https://git-scm.com/docs/git-sparse-checkout.html
-  scope_of_support: Состав рабочего дерева, не ACL.
+  scope_of_support: Working tree composition, not an ACL.
 - id: agents-md
   title: OpenAI AGENTS.md
   url: https://developers.openai.com/codex/guides/agents-md/
-  scope_of_support: Адаптер для конкретного клиента.
+  scope_of_support: An adapter for a specific client.
 - id: abac
   title: NIST ABAC
   url: https://csrc.nist.gov/Projects/attribute-based-access-control
-  scope_of_support: Субъект, объект, операция, условия.
+  scope_of_support: Subject, object, operation, conditions.
 - id: dgm
   title: Darwin Gödel Machine
   url: https://arxiv.org/abs/2505.22954
-  scope_of_support: Ограниченные эксперименты self-improvement, не результаты EKK.
+  scope_of_support: Limited self-improvement experiments, not EKK results.
 - id: citation
   title: GitHub citation files
   url: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-citation-files
-  scope_of_support: Метаданные цитирования.
+  scope_of_support: Citation metadata.
 - id: license
   title: Apache License 2.0
   url: https://www.apache.org/licenses/LICENSE-2.0
-  scope_of_support: Лицензия для выбора владельцем.
+  scope_of_support: A license for the owner to choose.

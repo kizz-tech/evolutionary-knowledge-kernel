@@ -1,12 +1,12 @@
-# Вклад в проект
+# Contributing
 
-Сначала укажите проблему, реальный пример и проверку ожидаемого улучшения.
-Не требуется новая онтология или новый lifecycle для каждого нового случая.
+First state the problem, a real example, and a check of the expected improvement.
+A new ontology or lifecycle is not required for every new case.
 
-Вклады не должны содержать материалы, которые автор не вправе распространять.
-Правила лицензирования и принятия вкладов фиксируются до первого публичного выпуска.
-Предлагаемый базовый выбор для собственных материалов: Apache-2.0.
+Contributions must not contain materials the author has no right to distribute.
+Licensing and contribution acceptance rules are established before the first public release.
+Proposed default choice for original materials: Apache-2.0.
 
-Для изменения формата добавляйте совместимый пример, негативный тест и миграционный контракт.
-Для изменения метода добавляйте сравнение с прежним методом, включая его стоимость.
-Для изменения документации отличайте проектное предложение от проверенного поведения.
+For format changes, add a compatible example, a negative test, and a migration contract.
+For method changes, add a comparison with the previous method, including its cost.
+For documentation changes, distinguish a design proposal from verified behavior.

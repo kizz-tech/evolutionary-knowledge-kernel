@@ -1,22 +1,22 @@
-# EKK: спецификация и стартовый комплект
+# EKK: specification and starter kit
 
-Начните с `ARCHITECTURE.ru.md`, затем откройте `ekk/docs/implementation.ru.md`.
-`ekk/docs/architecture.ru.md` является исходником архитектурного документа для будущего репозитория;
-верхнеуровневый `ARCHITECTURE.ru.md` является его экспортной копией для чтения вне репозитория.
+Start with `ARCHITECTURE.md`, then open `ekk/docs/implementation.md`.
+`ekk/docs/architecture.md` is the source architecture document for the future repository;
+the top-level `ARCHITECTURE.md` is its exported copy for reading outside the repository.
 
-В комплекте есть предложенная структура публичного проекта, нормативный черновик, схемы,
-синтетический публичный realm, личный и корпоративный примеры, workspace binding,
-три первоначальных pack, план реализации, миграционный контракт, исследовательский протокол
-и исполняемый **read-only валидатор файловых примеров** с тестами.
+The kit includes a proposed public project structure, a normative draft, schemas,
+a synthetic public realm, personal and corporate examples, a workspace binding,
+three initial packs, an implementation plan, a migration contract, a research protocol,
+and an executable **read-only validator for file examples** with tests.
 
-Полноценного runtime, CLI `ekk`, серверной изоляции, CAS-writer, мигратора и агентного планировщика
-здесь пока нет. Предложенные команды описывают интерфейс для реализации, а не доступные программы.
-Ни один файл из вашей LIFEOS или компании не переносился. GitHub-репозитории не создавались.
-Все ID, принятия и метрики в примерах демонстрационные; подтверждённых результатов исследования нет.
+A full runtime, the `ekk` CLI, server isolation, a CAS writer, a migrator, and an agent scheduler
+are not present yet. The proposed commands describe an interface to implement, not available programs.
+No files from your LIFEOS or company were transferred. No GitHub repositories were created.
+All IDs, acceptances, and metrics in the examples are illustrative; there are no verified research results.
 
-## Что действительно запускается
+## What actually runs
 
-Из каталога `ekk/`, в Python-окружении с PyYAML и jsonschema:
+From the `ekk/` directory, in a Python environment with PyYAML and jsonschema:
 
 ```bash
 python tools/validate.py knowledge
@@ -25,14 +25,14 @@ python tools/validate.py ../realm-templates/organization
 python -m unittest discover -s tests -v
 ```
 
-Зависимости описаны в `ekk/tools/requirements.txt`. Сеть валидатор не использует.
-Он проверяет форму, локальные ссылки, доступные source hashes и привязку receipt к содержимому.
-Он **не доказывает** правдивость текста, полномочия автора, безопасность ACL, продуктивность
-или корректность будущего runtime. Отчёт явно возвращает эти ограничения.
+Dependencies are listed in `ekk/tools/requirements.txt`. The validator does not use the network.
+It checks structure, local references, available source hashes, and receipt binding to content.
+It **does not prove** the truth of the text, the author's authority, ACL security, productivity,
+or the correctness of a future runtime. The report explicitly returns these limitations.
 
-Примеры нельзя использовать как один общий рабочий vault. Они иллюстрируют **разные репозитории**.
-При создании реального realm агент задаёт новый realm ID, новые context ID и настоящего владельца.
-Публичность примера не делает публичными ваши реальные данные.
+The examples must not be used as one shared working vault. They illustrate **separate repositories**.
+When creating a real realm, the agent assigns a new realm ID, new context IDs, and the actual owner.
+A public example does not make your real data public.
 
-Перед публикацией подтвердите права и выбранную лицензию. Комплект не принимает правовые решения
-за владельца и не содержит вымышленного LICENSE, DOI или списка научных результатов.
+Before publication, confirm rights and the chosen license. The kit does not make legal decisions
+for the owner and contains no fabricated LICENSE, DOI, or list of research results.

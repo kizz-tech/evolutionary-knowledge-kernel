@@ -133,7 +133,7 @@ store.apply({'records/a.md': b'two'}, base=sys.argv[2], idempotency_key='exit', 
         subprocess.run(["git", "-C", str(self.path), "config", "core.autocrlf", "true"], check=True)
         changes = {
             ".gitattributes": b"*.md text eol=lf\n",
-            "records/space and таб.md": b"line\r\nnext\r\n",
+            "records/space and \u0442\u0430\u0431.md": b"line\r\nnext\r\n",
             "records/line\nwith\ttab.md": b"blob\x00\xff\n123 blob 8\n",
             "records/-leading.md": b"",
             'records/"quote.md': b"same blob",
@@ -364,7 +364,7 @@ class EnvelopeTests(unittest.TestCase):
 
 class SuppliedSchemaTests(unittest.TestCase):
     def test_exact_optional_fields_and_open_identifiers(self):
-        record = dict(schema="ekk.record/0.1", id="human readable/идентификатор", kind="source", title=" ", scope=["scope with spaces"], revision=1,
+        record = dict(schema="ekk.record/0.1", id="human readable/\u0438\u0434\u0435\u043d\u0442\u0438\u0444\u0438\u043a\u0430\u0442\u043e\u0440", kind="source", title=" ", scope=["scope with spaces"], revision=1,
                       created_at="2026-09-07T10:00:00+03:00", created_by="Human Name <owner>", classification="restricted",
                       source={"assets": [{"path": "sources/original.bin", "sha256": "a" * 64}]},
                       relations=[{"rel": "supports", "target": "another/id", "digest": "sha256:" + "b" * 64}],

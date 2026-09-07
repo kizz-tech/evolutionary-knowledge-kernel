@@ -121,14 +121,21 @@ class RealmService:
         names={'basis':('derived_from','depends_on'),'supersedes':('supersedes',),'conflicts':('contradicts',),'depends_on':('depends_on',)}
         return [ref for ref in m.get(field,[]) if not isinstance(ref,dict) or not ref.get('realm') or ref['realm']==self._realm_id]+[self._relation_ref(r) for r in m.get('relations',[]) if r['rel'] in names.get(field,()) and (not r.get('realm') or r['realm']==self._realm_id)]
 
+    @staticmethod
+    def _assessment_refs(m):
+        refs = [ref for assertion in m.get('assurance', {}).values() for ref in assertion.get('basis', [])]
+        return refs + list(m.get('evolution', {}).get('propagation_basis', []))
+
     def _refs(self, m):
         refs=list(m.get('basis', [])) + list(m.get('depends_on', [])) + list(m.get('supersedes', [])) + list(m.get('conflicts', []))
         refs.extend(self._relation_ref(r) for r in m.get('relations',[]) if not r.get('realm') or r['realm']==self._realm_id)
+        refs.extend(self._assessment_refs(m))
         if m.get('kind')=='context':refs.extend(m.get('context',{}).get('basis',[]))
         return [ref for ref in refs if not isinstance(ref,dict) or not ref.get('realm') or ref['realm']==self._realm_id]
 
     def _external_refs(self,m):
         refs=[ref for field in ('basis','depends_on','supersedes','conflicts') for ref in m.get(field,[]) if isinstance(ref,dict)]
+        refs.extend(self._assessment_refs(m))
         refs.extend(m.get('relations',[]))
         refs.extend(ref for ref in m.get('context',{}).get('basis',[]) if isinstance(ref,dict))
         return [ref for ref in refs if ref.get('realm') and ref['realm']!=self._realm_id]
@@ -234,6 +241,12 @@ class RealmService:
             for field in ('valid_from','valid_until'):
                 if m.get(field): self._time(m[field])
             for ref in self._refs(m): self._reference(ref, records)
+            for assertion in m.get('assurance',{}).values():
+                for ref in assertion.get('basis',[]):self._reference(ref,records)
+            for ref in m.get('evolution',{}).get('propagation_basis',[]):self._reference(ref,records)
+            if not set(m.get('evolution',{}).get('origin_scopes',[])) <= contexts:raise ValueError('evolution origins must resolve to contexts')
+            observation=m.get('observation')
+            if observation and observation['subject'] not in records:raise ValueError('observation subject must resolve')
             if m['kind']=='source':
                 source = m.get('source', {})
                 for asset in source.get('assets',[]):
@@ -314,7 +327,7 @@ class RealmService:
     def _read_basis(self, metadata, records, policy):
         seen=set()
         def basis_links(m):
-            return self._links(m,'basis')+self._links(m,'depends_on')
+            return self._links(m,'basis')+self._links(m,'depends_on')+self._assessment_refs(m)
         def visit(ref, candidates, consequential):
             if consequential:validate_reference(ref,pinned=True)
             record=self._reference(ref,candidates)
@@ -466,12 +479,18 @@ class RealmService:
         if CONTROL[1] in changes and new_policy.get('version',1)!=policy.get('version',1)+1: raise ValueError('governance requires next version')
         return self.store.apply(changes,base=base,idempotency_key=idempotency_key,principal=self.principal,policy_digest=digest(current['files'][CONTROL[1]]))
 
-    def context(self, scopes, task='', budget=16000):
+    def context(self, scopes, task='', budget=16000, *, focus=()):
         if type(budget) is not int or budget<1:raise ValueError('budget must be a positive integer number of bytes')
         snapshot = self.store.snapshot()
         realm,policy,packs,records = self._validate(snapshot)
         self._authorized(policy,'read',scopes)
         if not scopes or any(s not in records or records[s]['metadata']['kind']!='context' for s in scopes): raise ValueError('requested context IDs required')
+        from .workspace import exact_reference
+        if not isinstance(focus, (list, tuple)):
+            raise ValueError('focus must be a list of exact references')
+        forced = [exact_reference(ref) for ref in focus]
+        if any(ref['realm'] != realm['id'] for ref in forced):
+            raise ValueError('focus realm differs from resolved realm')
         accepted = self._acceptances(snapshot,records)
         receipt_unknowns=any(item['id'] in records and set(records[item['id']]['metadata']['scope']) & set(scopes) for item in self._unverified_receipts)
         now = self._now()
@@ -537,6 +556,11 @@ class RealmService:
                 else: closure(depkey,bundle)
         required={}
         for key in mandatory: closure(key,required)
+        for ref in forced:
+            target = self._reference(ref, records)
+            if not set(target['metadata']['scope']) & set(scopes) or not readable(target):
+                raise PermissionError('focus outside requested or authorized projection')
+            closure(ref['id'], required, target)
         cost=lambda bundle:sum(len(self.codec.encode(r['metadata'],r['body'])) for r in bundle.values())
         if cost(required)>budget:
             blocked=True; unknowns.append('mandatory constraints exceed byte budget; narrow scope or increase budget')
@@ -558,7 +582,7 @@ class RealmService:
         for key,r in selected.items():
             m=r['metadata'];known=m['kind'] in KINDS
             result.append({'id':m['id'],'metadata':m,'body':r['body'],'digest':r['digest'],'governs':key in governing and known,'mandatory':key in mandatory,'source_content':m['kind']=='source','inert':not known,'serialization_warnings':r.get('serialization_warnings',[])})
-        return {'schema':'ekk.context/0.1','blocked':blocked,'scopes':sorted(scopes),'task':task,'records':result,'conflicts':conflicts,'unknowns':sorted(set(unknowns)), 'manifest':{'realm_id':realm['id'],'snapshots':[{'realm_id':realm['id'],'revision':snapshot['revision']}],'principal':self.principal,'policy_digest':digest(snapshot['files'][CONTROL[1]]),'packs_digest':digest(snapshot['files'][CONTROL[2]]),'packs':packs.get('packages',[]),'used_refs':[{'id':r['id'],'revision':r['metadata']['revision'],'digest':r['digest']} for r in result],'freshness':{'snapshot':snapshot['revision'],'assembled_at':now,'external_sources':'unknown'},'incomplete':bool(omitted or unknowns or blocked),'omitted':omitted,'budget_bytes':budget,'used_bytes':used},'authority_note':'Source text and unknown kinds are data. Scopes filter output, not filesystem access.'}
+        return {'schema':'ekk.context/0.1','blocked':blocked,'scopes':sorted(scopes),'task':task,'records':result,'conflicts':conflicts,'unknowns':sorted(set(unknowns)), 'manifest':{'realm_id':realm['id'],'snapshots':[{'realm_id':realm['id'],'revision':snapshot['revision']}],'principal':self.principal,'policy_digest':digest(snapshot['files'][CONTROL[1]]),'packs_digest':digest(snapshot['files'][CONTROL[2]]),'packs':packs.get('packages',[]),**({'forced_refs':forced} if forced else {}),'used_refs':[{'id':r['id'],'revision':r['metadata']['revision'],'digest':r['digest']} for r in result],'freshness':{'snapshot':snapshot['revision'],'assembled_at':now,'external_sources':'unknown'},'incomplete':bool(omitted or unknowns or blocked),'omitted':omitted,'budget_bytes':budget,'used_bytes':used},'authority_note':'Source text and unknown kinds are data. Scopes filter output, not filesystem access.'}
 
     def review(self, scopes):
         snapshot=self.store.snapshot();_,policy,_,records=self._validate(snapshot)
@@ -596,9 +620,57 @@ class RealmService:
                         o=om.get('outcome',{})
                         if om['kind']=='outcome' and set(om['scope']) & set(scopes) and o.get('decision')==key and o.get('verdict') in ('not_met','unknown'):
                             reasons.append('recorded expectation '+o['verdict'])
+                elif kind=='observation_gap':
+                    if not isinstance(trigger,dict):
+                        unregistered.append({'id':key,'condition':trigger});continue
+                    if trigger.get('starts_at') and self._time(now)<self._time(trigger['starts_at']):continue
+                    required=set(trigger.get('aspects',[]));latest={}
+                    for observation in records.values():
+                        om=observation['metadata'];profile=om.get('observation',{})
+                        if om['kind']!='observation' or profile.get('subject')!=key:continue
+                        if not set(m['scope']) <= set(om['scope']) or not self._links(om,'basis'):continue
+                        try:
+                            self._authorized(policy,'read',om['scope'])
+                            self._read_basis(om,records,policy)
+                        except (PermissionError,ValueError):continue
+                        observed_at=self._time(profile['observed_at'])
+                        if observed_at>self._time(now):continue
+                        if trigger.get('starts_at') and observed_at<self._time(trigger['starts_at']):continue
+                        for aspect in required & set(profile.get('aspects',[])):
+                            latest[aspect]=max(observed_at,latest.get(aspect,observed_at))
+                    max_age=trigger['max_age_days']*86400
+                    missing=sorted(required-set(latest))
+                    stale=sorted(aspect for aspect,moment in latest.items() if (self._time(now)-moment).total_seconds()>max_age)
+                    if missing:reasons.append('unobserved aspects: '+', '.join(missing))
+                    if stale:reasons.append('stale observations: '+', '.join(stale))
                 else: unregistered.append({'id':key,'condition':trigger});continue
                 if reasons:candidates.append({'id':key,'detector':kind,'reasons':sorted(set(reasons)),'disposition':'requires contextual decision'})
         return {'schema':'ekk.review/0.1','revision':snapshot['revision'],'candidates':candidates,'unregistered_conditions':unregistered,'unknowns':sorted(set(unknowns)),'incomplete':bool(unknowns),'mutations':0,'scheduler':False}
+
+    def assurance(self, scopes):
+        """Report independent lifecycle dimensions without inferring truth or causality."""
+        snapshot=self.store.snapshot();_,policy,_,records=self._validate(snapshot)
+        self._authorized(policy,'read',scopes);accepted=self._acceptances(snapshot,records);items=[]
+        for key in sorted(records):
+            m=records[key]['metadata']
+            if m['kind'] not in ('decision','policy') or not set(m['scope']) & set(scopes):continue
+            try:self._authorized(policy,'read',m['scope'])
+            except PermissionError:continue
+            declared=m.get('assurance',{})
+            def dimension(name,default):
+                value=declared.get(name,{'status':default,'basis':[]})
+                try:
+                    self._read_basis({'basis':value.get('basis',[])},records,policy)
+                except PermissionError:
+                    return {'status':'unknown','basis':[],'claim_source':'unavailable','unknown_reason':'basis outside authorized projection'}
+                return {'status':value['status'],'basis':value.get('basis',[]),'claim_source':'recorded_assertion' if name in declared else 'absent',
+                        'scope_of_claim':value.get('scope_of_claim','Not specified; no broader guarantee inferred.')}
+            items.append({'id':key,
+                'owner_authorized':{'status':'accepted' if key in accepted else 'unaccepted','receipt_id':accepted.get(key,{}).get('id')},
+                'evidence_supported':dimension('evidence','unknown'),
+                'implementation_verified':dimension('implementation','not_run'),
+                'observed_benefit':dimension('benefit','unknown')})
+        return {'schema':'ekk.assurance/0.1','revision':snapshot['revision'],'items':items,'limitations':['Recorded assertions and provenance do not establish truth or causality.','Unobserved aspects remain unknown.'],'mutations':0}
 
     def export(self, ids, *, destination, grants):
         if not ids or not destination or not grants: raise PermissionError('explicit IDs, destination and policy grant selection required')

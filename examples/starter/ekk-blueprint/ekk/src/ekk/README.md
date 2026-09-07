@@ -1,10 +1,10 @@
-# Будущий движок
+# Future engine
 
-Здесь не находится скрытая готовая реализация. Создавайте модули по мере выполнения
-`docs/implementation.ru.md`: model, application, ports, adapters и cli.py.
-Вначале один Python-пакет. Не требуется создавать пустые interfaces и классы для всех
-теоретических будущих backend.
+There is no hidden finished implementation here. Create modules as you work through
+`docs/implementation.md`: model, application, ports, adapters, and cli.py.
+Start with one Python package. There is no need to create empty interfaces and classes for every
+theoretical future backend.
 
-Направление зависимостей: adapters → application → model. Доменные методы находятся
-в packs; core не знает терминов конкретной компании. Правила авторизации,
-целостности и допустимости снимков не делегируются LLM.
+Dependency direction: adapters → application → model. Domain methods belong
+in packs; the core does not know company-specific terms. Rules for authorization,
+integrity, and snapshot validity are not delegated to the LLM.

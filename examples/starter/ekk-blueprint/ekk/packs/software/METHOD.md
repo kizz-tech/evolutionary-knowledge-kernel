@@ -1,16 +1,16 @@
-# Разработка продукта
+# Product development
 
-Начинать с пользовательской потребности и существующего продукта. Рассмотреть настройку
-или расширение существующего инструмента до создания нового приложения.
+Start with the user need and the existing product. Consider configuring
+or extending an existing tool before creating a new application.
 
-Использовать действующие продуктовые границы, интерфейсы, дизайн и штатные средства проверки.
-Тесты не доказывают автоматически ценность архитектуры. Не добавлять тест, который просто
-цементирует случайную структуру реализации. Сначала оценить существующие проверки.
+Use the current product boundaries, interfaces, design, and established checks.
+Tests do not automatically prove the value of an architecture. Do not add a test that merely
+cements an incidental implementation structure. Assess existing checks first.
 
-Локальные обратимые улучшения допустимы в пределах делегированных полномочий.
-Смена общего контракта требует отдельного основания и проверки радиуса последствий.
-Повтор затруднения может требовать диагностики, не обязательно рефакторинга.
+Local reversible improvements are permitted within delegated authority.
+Changing a shared contract requires separate grounds and an assessment of its impact.
+A recurring difficulty may call for diagnosis, not necessarily refactoring.
 
-После работы связать ожидаемый результат с наблюдением. Код принят, опубликован,
-запущен и принёс пользу являются различными состояниями. Ненужные инструкции и инструменты
-удаляются через тот же процесс проверки, что и добавляются.
+After the work, connect the expected outcome with an observation. Code being accepted, published,
+run, and delivering value are distinct states. Unnecessary instructions and tools
+are removed through the same review process used to add them.

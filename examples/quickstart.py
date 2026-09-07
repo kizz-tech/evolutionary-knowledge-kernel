@@ -1,4 +1,4 @@
-"""Run a disposable EKK 0.4 CLI cycle; no existing EKK profile is used."""
+"""Run a disposable EKK CLI cycle; no existing EKK profile is used."""
 import argparse
 from datetime import datetime, timezone
 import json

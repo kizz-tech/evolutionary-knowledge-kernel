@@ -1,7 +1,7 @@
 schema: ekk.pack/0.1
 id: ekk/software
-version: 0.1.0-design
-description: Работа с существующим продуктом
+version: 0.1.0-design.en
+description: Working with an existing product
 requires_format:
 - ekk.record/0.1
 entrypoints:

@@ -1,7 +1,7 @@
 # personal-example
 
-Синтетический пример отдельного realm, не действующая база.
+A synthetic example of a separate realm, not an active database.
 
-Личные процессы владельца и частные исследования.
+The owner's personal processes and private research.
 
-ID, владелец и правила подлежат замене при создании реальной установки.
+Replace the IDs, owner, and rules when creating a real installation.

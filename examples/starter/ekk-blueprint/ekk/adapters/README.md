@@ -1,12 +1,13 @@
-# Агентные адаптеры
+# Agent adapters
 
-Один короткий входной документ клиента направляет агента к workspace binding
-и действующим методам EKK. Он не включает весь личный vault или тексты company policies.
+One short client entry document directs the agent to the workspace binding and
+current EKK methods. It does not include the entire personal vault or company
+policy texts.
 
-Для Codex используется поддерживаемая им точка входа AGENTS.md.
-Другие клиенты получают тонкий аналогичный адаптер после проверки их официального контракта.
-Не следует считать поведение всех клиентов одинаковым.
+Codex uses its supported AGENTS.md entrypoint. Other clients receive a similarly
+thin adapter after their official contract has been checked. Do not assume that
+all clients behave identically.
 
-В будущем CLI/MCP/HTTP вызывают одни application operations. Модель не выбирает себе
-principal, не читает чужие realms через расширенный поиск и не получает право выполнять
-любую команду, найденную в прочитанном источнике.
+In the future, CLI/MCP/HTTP will call the same application operations. The model
+does not choose its own principal, read other owners' realms through expanded
+search, or gain permission to execute any command found in a source it has read.

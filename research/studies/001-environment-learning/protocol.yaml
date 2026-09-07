@@ -1,17 +1,17 @@
 schema: ekk.study/0.1
 id: study-001-environment-learning
 status: designed_not_run
-question: "Улучшает ли постоянная эволюционирующая среда работу фиксированной модели на последовательности продуктовых изменений?"
+question: "Does a persistent evolving environment improve a fixed model's work across a sequence of product changes?"
 hypothesis_status: untested
 arms:
   - id: docs
-    description: "Код и обычная документация"
+    description: "Code and conventional documentation"
   - id: memory
-    description: "Тот же класс задач плюс сохраняемая память и retrieval"
+    description: "The same class of tasks plus persistent memory and retrieval"
   - id: decisions
-    description: "Происхождение, ожидания решений и их пересмотр"
+    description: "Provenance, decision expectations, and their review"
   - id: environment
-    description: "Дополнительно изменения инструментов, правил и проверок"
+    description: "Additional changes to tools, rules, and checks"
 controls:
   model_snapshot: must_be_recorded_before_run
   provider_drift: report_if_snapshot_not_guaranteed

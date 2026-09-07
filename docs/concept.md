@@ -1,59 +1,35 @@
-# Can an agent improve by changing its working environment?
+# Experience that improves subsequent work
 
-EKK explores a specific question: with the model held fixed, can accumulated
-sources, explicit decision grounds, and reviewed changes to working methods
-improve performance across a sequence of product changes?
+EKK asks whether a personal agent environment and shared work can accumulate
+methods whose usefulness survives changes in participant, model and conditions.
+The person receives the benefit and chooses the purpose. Shared work preserves
+continuity. Methods carry selected experience without requiring people to exchange
+all their memory.
 
-The environment contains more than remembered text. It contains the reasons a
-choice was made, the result expected from it, the evidence actually observed,
-and the conditions that would make the choice worth reconsidering. An agent can
-propose changing a method, tool, or check, but ordinary execution tools and their
-authorization still control whether that change happens.
+A personal draft can contain doubt or disagreement without becoming a project
+commitment. A project commitment can remain valid and available after its author
+leaves. Reading either does not transfer ownership or establish understanding.
 
-## A concrete example
+The central loop is experience → candidate method → independent evaluation →
+local admission → use → permitted transfer → receiver evaluation → reconsideration.
+Sometimes the correct final step is retirement, or no new method at all. More
+instructions and memories do not imply greater capability.
 
-A synthetic team adds a cache after measuring slow responses. The environment
-keeps the original measurement unchanged. A separate decision explains why the
-cache was selected and what latency improvement was expected. A later observation
-records a measured result. After a query rewrite removes the bottleneck, the
-agent can inspect the grounds and propose removing unnecessary cache machinery.
-This example illustrates the intended loop; it is not a measured study result.
+The current runnable example starts with a method that includes a source excerpt
+in a handoff. A later disclosure condition makes that method unsuitable. A
+failed case is retained, use is quarantined, local acceptance is superseded, and
+a new revision uses an allowed reference and digest. Original bytes and the
+adverse result remain reconstructable.
 
-## The implementation choices
+That is a deterministic mechanism demonstration. It does not establish LLM
+learning, human understanding or a causal productivity effect. The active study
+compares a strong engineered baseline, personal memory, shared memory/methods,
+and the combined approach under equal full-lifecycle budgets. It tests related
+held-out tasks and harmful obsolete methods, rather than replaying a learned
+answer. Human reconstruction and challenge of the grounds are measured separately.
 
-Sources and interpretations have different records. References pin IDs,
-revisions, and digests, so a changed file cannot silently become the old evidence.
-Applying a proposal requires its expected snapshot; a stale base requires a new
-review. Acceptance is a separate, verified operation tied to exact content and
-current governance. Imported history does not become an accepted local rule.
-
-Independent knowledge owners use separate realms. A project binding selects an
-authorized context through a local profile. Those profiles guide routing within
-a trusted local process; they do not isolate users who can read the same disk.
-The kernel keeps semantics separate from Markdown, Git, CLI, indexes, and
-execution adapters. Packs describe methods without executing code when loaded.
-
-## What would count as evidence?
-
-The [designed study](../research/studies/001-environment-learning/protocol.yaml)
-compares four conditions: ordinary code/documentation; persistent memory and
-retrieval; decision provenance, expectations, and revision; and environment
-changes to tools, rules, and checks. The model, budgets, task sequences, repeat
-count, and evaluation procedure must be fixed before running it.
-
-Measure verified task quality, regressions, repeated known failures, unnecessary
-interventions, total cost, and human involvement. Count context construction,
-maintenance, unsuccessful experiments, and review. Keep the evaluator and held-out
-answers outside the mutable agent workspace. Publish negative results too.
-
-The experiment has **not run**. Local functional tests show properties of this
-implementation. They do not establish that EKK beats documentation or memory,
-that benefits grow monotonically, or that a later faster task proves learning.
-
-## How to help
-
-Try the isolated demo. Report a reproducible failure, a missing use case, a cost
-that the protocol misses, or a simpler way to achieve the same behavior. Before
-an empirical run, help turn the designed protocol into a frozen, executable
-comparison. The first release is a concept, working implementation, and research
-invitation, with no claim of scientific novelty or demonstrated superiority.
+The research is `designed_not_run`. No claim of scientific novelty, universal
+scalability, monotonic improvement or general superiority follows from these
+mechanisms. [Architecture](final-architecture.md) and the
+[study contract](../research/studies/human-shared-method-transfer/README.md)
+state what is implemented and what still requires empirical observation.

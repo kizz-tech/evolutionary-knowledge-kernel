@@ -1,0 +1,68 @@
+{
+  "schema": "ekk.human-shared-method-study/0.1",
+  "id": "human-shared-method-transfer",
+  "version": "0.1",
+  "status": "designed_not_run",
+  "results": null,
+  "question": "Can personal environments and shared work retain useful methods across participant, model and task-condition changes?",
+  "arms": {
+    "baseline": "Strong engineered no-EKK workflow: same tools, ordinary documentation, source inputs and lifecycle budget; tune before freeze.",
+    "personal": "Personal memory plus explicitly exchanged accepted results; no shared memory or method transfer.",
+    "shared": "Shared project state and shared methods; no personal memory.",
+    "combined": "Personal environments plus shared state and explicit, scoped, versioned method transfer."
+  },
+  "phases": [
+    "acquire",
+    "participant_transfer",
+    "model_replacement",
+    "adverse"
+  ],
+  "cost_stages": [
+    "setup",
+    "execution",
+    "context",
+    "maintenance",
+    "experiments_and_failures",
+    "verification",
+    "human_review"
+  ],
+  "cost_units": [
+    "tokens",
+    "money",
+    "human_minutes",
+    "wall_seconds"
+  ],
+  "design": {
+    "allocation": "Matched independent four-arm trajectories, randomized order and preregistered replica count with precision rationale; never recycle state across arms or replicas.",
+    "transfer": "Participant B solves related but nonidentical held-out tasks with participant A's permitted results/methods, never A's personal archive or held-out answers. Replace the model only in the frozen model_replacement phase; retain the replacement through adverse.",
+    "adverse": "Freeze a condition change that invalidates the acquired method. Measure detection, safe rejection/revision, time/cost, residual harm and unnecessary rejection of useful methods; preserve negative and stopped runs.",
+    "human_understanding": "Separate blind human rubric: reconstruct grounds, challenge a conclusion, state applicability limits. Never infer understanding from agent task success or stored knowledge.",
+    "mechanism_criteria": [
+      "Transfer only a selected method version with conditions and provenance",
+      "Reject prohibited private-source disclosure",
+      "Detect invalid applicability under adverse condition",
+      "Withdraw or revise an invalid method before reuse"
+    ],
+    "benefit_criteria": "Freeze product acceptance, substantial manual rework, regression/harm bounds, observation window and minimum practically relevant difference. Compare held-out outcomes and full costs; no benefit claim from mechanism replay alone.",
+    "falsification": [
+      "No improvement over strong baseline under equal lifecycle caps",
+      "Benefit fails on participant or model replacement",
+      "Obsolete methods persist or useful actions are blocked beyond frozen bounds",
+      "Maintenance, failed experiments or human work consume the gain"
+    ],
+    "limitations": [
+      "Declaration validation does not prove OS isolation or truthful observations",
+      "Tasks in a trajectory are dependent",
+      "Self-use and synthetic mechanism checks cannot establish general benefit",
+      "No monotonic improvement, novelty, or universal scalability claim"
+    ]
+  },
+  "freeze": null,
+  "freeze_contract": "Before observation set mode (rehearsal or observed), replicas, precision_rationale, task_family, phases (task digest, input digest, heldout answer digest, related_to, participant, model snapshot), evaluator (digest, version, environment), harness_version, kernel_version, tools_digest, baseline_workflow_digest, sources (digest, owner, provenance, allowed_participants), budget_caps (all cost_units), currency, criteria_digest, observation_window, failure_bounds_digest, isolation_receipt. Commit the exact bytes outside candidate write authority. Report requires its externally pinned SHA-256. Actual identities/tasks/models remain unset here; no empirical runs have occurred.",
+  "direction_source": {
+    "sha256": "8985748a401e097a5f7e8228b936ce32bc0abcc7b9a323ea84fb76b4d4b6b34c",
+    "role": "Owner-supplied final direction; historical source, not empirical evidence",
+    "owner": "requesting owner",
+    "publication_authority": "not implied"
+  }
+}

@@ -1,1 +1,1 @@
-Синтетическое наблюдение: в учебной задаче агент не нашёл основание прежнего решения. Это не результат реального эксперимента.
+Synthetic observation: in a training task, the agent did not find the grounds for a previous decision. This is not the result of a real experiment.

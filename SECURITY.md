@@ -1,6 +1,6 @@
 # Security boundary
 
-EKK 0.4 is a trusted local runtime. Local profiles constrain routing; they do not
+EKK 0.5 is a trusted local runtime. Local profiles constrain routing; they do not
 isolate processes that share filesystem access. Do not give someone a Git clone
 if they must not see some of its files or history. Multiuser authentication and
 hosted authorization are outside this release.

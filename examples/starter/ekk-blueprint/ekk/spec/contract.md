@@ -1,81 +1,90 @@
-# Контракт файлового профиля EKK 0.1
+# EKK 0.1 file profile contract
 
-Статус: предложенный формат. Схемы ниже проверяют структуру, но не все смысловые инварианты.
+Status: proposed format. The schemas below validate structure, but not all semantic
+invariants.
 
-## Идентичность
+## Identity
 
-Realm имеет устойчивый ID. Запись имеет устойчивый ID независимо от пути. Новые IDs
-рекомендуется создавать как UUID; существующие устойчивые IDs допускаются без переименования.
-В одном realm повторный ID запрещён. Межrealm адрес состоит из origin realm и ID записи;
-локальный alias не является глобальной идентичностью. Replica сохраняет origin.
+A realm has a stable ID. A record has a stable ID independent of its path. UUIDs are
+recommended for new IDs; existing stable IDs are allowed without renaming. Duplicate
+IDs within a realm are prohibited. An inter-realm address consists of the origin
+realm and record ID; a local alias is not a global identity. A replica preserves
+its origin.
 
-## Конверт
+## Envelope
 
-Markdown начинается YAML frontmatter, затем следует содержательное тело.
-Обязательны schema, id, kind, title, scope, revision, created_at, created_by.
-Значение `created_by` является атрибуцией, не доказательством аутентификации.
-Realm и default classification находятся в manifest.
+Markdown starts with YAML frontmatter, followed by a substantive body. Required
+fields are schema, id, kind, title, scope, revision, created_at, and created_by.
+The `created_by` value is attribution, not proof of authentication. The realm and
+default classification are in the manifest.
 
-Context является записью kind=context с `context.purpose`. Его scope может ссылаться на
-него самого. Source является записью kind=source с `source.assets` или внешним URI.
-Политики и методы не исполняются из произвольного текста. Неизвестный kind можно
-сохранить, но нельзя автоматически интерпретировать как authority или executor.
+A context is a kind=context record with `context.purpose`. Its scope may refer to
+itself. A source is a kind=source record with `source.assets` or an external URI.
+Policies and methods are not executed from arbitrary text. An unknown kind may be
+preserved, but must not be automatically interpreted as authority or an executor.
 
-Состояния claims, actions и decisions не объединяются в универсальное поле `done`.
-Факт хранения не означает принятия, истинности, исполнения, deploy или результата.
-Действующее принятие определяется receipt и контрольной политикой, а не полем accepted.
+The states of claims, actions, and decisions are not combined into a universal
+`done` field. Storage does not imply acceptance, truth, execution, deployment, or
+an outcome. Current acceptance is determined by a receipt and governing policy,
+not by an accepted field.
 
-## Ссылки
+## References
 
-`relations` содержит rel, target и при необходимости realm, revision, digest, selector.
-Локальная связь разрешается внутри текущего realm. Внешняя связь имеет явный origin realm
-и не даёт разрешения чтения. Незнание внешнего объекта не является разрешением расширить поиск.
+`relations` contains rel, target, and, when needed, realm, revision, digest, and
+selector. A local relation resolves within the current realm. An external relation
+has an explicit origin realm and does not grant read permission. Lack of knowledge
+about an external object is not permission to expand the search.
 
-Минимально понятные отношения: about, derived_from, supports, contradicts, supersedes,
-implements, evaluates, depends_on. Семантическая похожесть является поисковой подсказкой.
-Поддержка не равна доказательству, последовательность во времени не равна причинности.
-Ссылки оснований при существенном принятии прикрепляются к версии/digest, иначе отмечаются
-как непроверенные. Корневые источники могут быть зависимы даже при разных IDs.
+The minimum understood relations are about, derived_from, supports, contradicts,
+supersedes, implements, evaluates, and depends_on. Semantic similarity is a search
+hint. Support is not proof; temporal sequence is not causation. Grounding references
+for significant acceptance are pinned to a version/digest or marked as unverified.
+Root sources may be dependent even when they have different IDs.
 
-## Время и пересмотр
+## Time and review
 
-created_at отражает создание записи. observed_at, recorded_at, valid_from и valid_until
-используются только с соответствующим значением. Неизвестные времена не подставляются из
-даты миграции. Известность системе не доказывает чтение конкретным агентом.
+created_at reflects record creation. observed_at, recorded_at, valid_from, and
+valid_until are used only with their corresponding meanings. Unknown times are
+not filled in from the migration date. Being known to the system does not prove
+that a particular agent has read something.
 
-review.due_at является датой выбранного пересмотра, не датой автоматической отмены.
-review.when содержит условия; без зарегистрированного детектора это текст для анализа,
-а не выполненная автоматизация.
+review.due_at is the date chosen for review, not an automatic revocation date.
+review.when contains conditions; without a registered detector, this is text for
+analysis, not completed automation.
 
-## Исходники
+## Sources
 
-Локальные assets находятся в разрешённом sources-root; относительные пути не должны
-выходить за root или проходить через symlink. Digest SHA-256 относится к bytes источника.
-Изменение source требует новой версии/нового source, а не незаметной подмены.
-Крупные или внешние объекты допускают URI, revision/digest и статус доступности.
-Нет обязанности бесконечно хранить источник. Удаление и отзыв распространения явно
-учитываются в provenance и возможностях последующей проверки.
+Local assets are within the authorized sources-root; relative paths must not
+escape the root or pass through a symlink. A SHA-256 digest refers to the source
+bytes. A source change requires a new version/new source, not an unnoticed
+replacement. Large or external objects may use a URI, revision/digest, and
+availability status. There is no obligation to retain a source forever. Deletion
+and withdrawal from distribution are explicitly reflected in provenance and in
+the ability to verify later.
 
-## Принятие и запись
+## Acceptance and writing
 
-Receipt связывает принятую revision с SHA-256 bytes и контрольным policy digest.
-Его actor устанавливает доверенный writer, а не сам текст предложения. Проверка схемы
-receipt не доказывает, что actor действительно подписал или выполнил действие.
+A receipt binds the accepted revision to the SHA-256 of its bytes and the governing
+policy digest. Its actor is established by the trusted writer, not by the proposal
+text itself. Receipt schema validation does not prove that the actor actually signed
+or performed the action.
 
-Интеграция использует base snapshot, compare-and-swap, idempotency и recovery.
-Ручное изменение принятых bytes не сохраняет старое принятие.
-В файловом профиле общий опубликованный снимок обновляет один интегратор;
-parallel agents работают с proposals. Слияние текстов не разрешает смысловой конфликт.
+Integration uses a base snapshot, compare-and-swap, idempotency, and recovery.
+Manually changing accepted bytes does not preserve their old acceptance. In the
+file profile, one integrator updates the shared published snapshot; parallel agents
+work with proposals. Merging text does not resolve a semantic conflict.
 
-## Доступ
+## Access
 
-Realm scope не равен audience и не равен write authority. Применение зависит от субъекта,
-операции, целевого объекта и контекста. Кеш и производный текст не снижают classification.
-Нельзя считать YAML, Git ignore или sparse checkout защитой от читателя полного Git-клона.
+Realm scope is neither audience nor write authority. Application depends on the
+principal, operation, target object, and context. A cache and derived text do not
+lower classification. YAML, Git ignore, and sparse checkout must not be treated as
+protection from a reader of the full Git clone.
 
-## Совместимость
+## Compatibility
 
-Версии format, engine и packs раздельны. Неизвестные поля сохраняются при round-trip.
-Неизвестная обязательная capability блокирует consequential operation.
-Формат может развиваться через проверяемую миграцию, а не скрытую нормализацию corpus.
-Схемы не означают, что core уже реализует безопасный multi-user runtime.
+Format, engine, and pack versions are separate. Unknown fields are preserved
+through a round trip. An unknown mandatory capability blocks a consequential
+operation. The format may evolve through a verifiable migration, not hidden
+normalization of the corpus. Schemas do not mean that the core already implements
+a safe multi-user runtime.

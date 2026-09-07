@@ -2,7 +2,7 @@
 schema: ekk.record/0.1
 id: urn:uuid:36881cd1-9e91-548f-973f-6d9d64ed2cf1
 kind: decision
-title: Предложение сохранять основания существенных изменений
+title: Proposal to retain grounds for significant changes
 scope:
 - urn:uuid:4154d610-68a8-5902-83bb-f29f52561aaf
 revision: 1
@@ -14,23 +14,23 @@ relations:
   revision: 1
 review:
   when:
-  - После сопоставимого опыта использования проверить полезность и стоимость.
+  - After comparable usage experience, assess usefulness and cost.
 ---
 
-# Предложение
+# Proposal
 
-## Выбор
+## Choice
 
-Для существенных изменений сохранять ссылку на точное основание.
+For significant changes, retain a reference to the precise grounds.
 
-## Ожидание
+## Expectation
 
-Следующий агент сможет объяснить решение без повторения всего исследования.
+The next agent will be able to explain the decision without repeating the entire investigation.
 
-## Проверка
+## Verification
 
-Сравнить точность ответа и полную стоимость работы на сопоставимых случаях.
+Compare answer accuracy and the full cost of work across comparable cases.
 
-## Статус
+## Status
 
-Только предложение. Подтверждения принятия нет; синтетический пример не доказывает пользу метода.
+Proposal only. There is no confirmation of acceptance; the synthetic example does not prove the method's benefit.

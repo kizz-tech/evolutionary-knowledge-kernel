@@ -1,27 +1,27 @@
-# Исследование 001: улучшение среды при фиксированной модели
+# Study 001: improving the environment with a fixed model
 
-**Статус: эксперимент не проводился. Результатов нет.**
+**Status: the experiment has not been run. There are no results.**
 
-## Вопрос
+## Question
 
-См. `protocol.yaml`. Перед запуском необходимо выбрать задачи, бюджеты и достаточный объём
-повторений. Текущая форма протокола не является завершённой предварительной регистрацией.
+See `protocol.yaml`. Before running, select tasks, budgets, and a sufficient number
+of repetitions. The current protocol is not a completed preregistration.
 
-## Методика
+## Methodology
 
-Здесь будет зафиксирована фактически выполненная методика, включая версии моделей,
-инструментов, состояния репозиториев, допустимые источники и отступления от протокола.
+The methodology actually used will be recorded here, including model and tool versions,
+repository states, permitted sources, and deviations from the protocol.
 
-## Результаты
+## Results
 
-Не заполнены. Синтетические примеры `knowledge/` не являются эмпирическими результатами.
+Not filled in. The synthetic examples in `knowledge/` are not empirical results.
 
-## Ограничения
+## Limitations
 
-Не следует считать доказанной пользу графовой памяти, рекурсивного самоулучшения
-или переноса опыта между компаниями до проведения соответствующего сравнения.
+Do not consider the benefits of graph memory, recursive self-improvement,
+or transfer of experience between companies proven before conducting the relevant comparison.
 
-## Артефакты
+## Artifacts
 
-Публиковать только разрешённые checkpoints, manifests, агрегаты и воспроизводимые fixtures.
-Приватные данные и held-out ответы не распространяются автоматически.
+Publish only permitted checkpoints, manifests, aggregates, and reproducible fixtures.
+Private data and held-out answers are not distributed automatically.

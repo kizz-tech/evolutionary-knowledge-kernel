@@ -1,9 +1,9 @@
-# Базовый метод
+# Base method
 
-Установить действующий контекст и источник полномочий. Найти применимые ограничения,
-потом релевантные основания. Сохранять различие источника, интерпретации, предложения
-и принятого обязательства. Не повышать доверие из-за повторного пересказа.
+Establish the current context and source of authority. Find applicable constraints,
+then relevant grounds. Preserve the distinction between a source, an interpretation, a proposal,
+and an accepted commitment. Do not increase trust through repeated retelling.
 
-В результате работы сохранять только значимое новое знание или подтверждение результата.
-Новая запись необязательна. Сильное изменение требует основания, ожидаемого эффекта
-и пропорциональной проверки. Условия пересмотра не превращаются в бесконечный бэклог.
+Retain only significant new knowledge or confirmation of an outcome from the work.
+A new record is optional. A substantial change requires grounds, an expected effect,
+and proportionate verification. Review conditions must not become an endless backlog.

@@ -1,81 +1,81 @@
-# Протокол исследования v0.1
+# Research protocol v0.1
 
-Дата: 2026-09-05. Статус: draft, до эмпирического запуска. Основание и fingerprints исходных текстов: [README](README.md). Численные результаты отсутствуют. Протокол не является выполненным экспериментом или публичной preregistration.
+Date: 2026-09-05. Status: draft, before the empirical run. Basis and source-text fingerprints: [README](README.md). No numerical results are available. This protocol is neither a completed experiment nor a public preregistration.
 
-## Вопрос и проверяемое ожидание
+## Question and testable expectation
 
-При неизменной модели M улучшает ли эволюция внешней проектной среды качество и стоимость решения последующих задач относительно памяти и обычного проектного контекста?
+With model M held fixed, does evolution of the external project environment improve the quality and cost of solving subsequent tasks relative to memory and ordinary project context?
 
-H1: условие D превосходит B по заранее выбранному критерию с учётом полной стоимости; C позволяет оценить вклад provenance, ожиданий и пересмотра. A задаёт базовый уровень. До запуска нужно выбрать основной контраст, минимально полезный эффект и приоритет качества относительно стоимости. Сравнение поздних задач с ранними внутри одного проекта само по себе H1 не проверяет.
+H1: condition D outperforms B on a criterion selected in advance that accounts for full cost; C allows assessment of the contribution of provenance, expectations, and reconsideration. A provides a baseline. Before running, select the primary contrast, the minimum useful effect, and the priority of quality relative to cost. Comparing late tasks with early tasks within one project does not by itself test H1.
 
-Операционное «fixed model» означает закреплённый идентификатор и доступную версию модели, одинаковые параметры генерации и базовый агентный harness. Доступный alias без гарантии неизменности backend ограничивает силу вывода. Смена модели начинает отдельный блок/эксперимент; результаты разных моделей не объединяются под H1 без отдельного анализа.
+Operationally, “fixed model” means a pinned model identifier and available version, identical generation parameters, and the same base agent harness. An available alias without a guarantee that the backend remains unchanged limits the strength of the conclusion. A model change starts a separate block/experiment; results from different models are not pooled under H1 without a separate analysis.
 
-## 1. Функциональный smoke и рекурсивное использование
+## 1. Functional smoke test and recursive use
 
-Минимальный сценарий использует собственный kernel как предмет: источник/событие, исходная интерпретация, commitment с ожидаемым последствием, наблюдаемый результат и решение сохранить, пересмотреть или убрать механизм. Отрицательный результат допустим. Фиксируются ссылки, временная применимость и граница известного на момент решения; пересмотр не уничтожает старое основание.
+The minimal scenario uses the kernel itself as its subject: a source/event, an initial interpretation, a commitment with an expected consequence, an observed result, and a decision to retain, reconsider, or remove a mechanism. A negative result is valid. Record references, temporal applicability, and the boundary of what was known at the time of the decision; reconsideration does not destroy the old grounds.
 
-Проверки smoke должны отвечать на конкретные вопросы: восстанавливается ли контекст из канонических материалов; не выдаётся ли будущая информация за ранее известную; достигаются ли затронутые зависимости; можно ли различить предложение изменения и действующий commitment; сохраняются ли предыдущая версия и источник. Конкретное покрытие сообщается после выполнения тестов реализации.
+Smoke checks must answer specific questions: can context be reconstructed from canonical materials; is future information kept distinct from what was known earlier; are affected dependencies reached; can a proposed change be distinguished from an active commitment; are the previous version and source preserved? Report specific coverage after running implementation tests.
 
-Рекурсивное исследование использует тот же механизм для вопроса о самом механизме. Например: «помогают ли явные provenance-ссылки корректнее пересматривать решение?» Ожидание, опыт и ревизия протокола адресуются в базе EKK, а исходные экспериментальные данные остаются у своего владельца со ссылкой и fingerprint. Новая версия протокола не меняет задним числом критерий успеха старого опыта.
+Recursive research uses the same mechanism to investigate the mechanism itself. For example: “Do explicit provenance links help reconsider a decision more accurately?” The expectation, experience, and protocol revision are addressable in the EKK store, while the original experimental data remain with their owner, with a reference and fingerprint. A new protocol version does not retroactively change the success criterion for earlier experience.
 
-Статус smoke в этом документе: **не подтверждён**; интегратор отражает реальные проверки отдельно. Статус H1: **pending** независимо от результата smoke.
+Smoke status in this document: **unconfirmed**; the integrator reports actual checks separately. H1 status: **pending**, regardless of the smoke result.
 
-## 2. Будущий longitudinal дизайн A/B/C/D
+## 2. Future longitudinal A/B/C/D design
 
-Исходный диалог предлагает несколько долгоживущих программных проектов и ориентир 50–200 последовательных задач на проект. Это проектная идея, а не обоснованный размер выборки. Размер и число независимых повторов определяются после оценки дисперсии, стоимости и мощности.
+The original dialogue proposes several long-lived software projects and a tentative range of 50–200 sequential tasks per project. This is a design idea, not a justified sample size. The size and number of independent repetitions are determined after estimating variance, cost, and power.
 
-| Условие | Доступная среда | Разрешённое накопление |
+| Condition | Available environment | Permitted accumulation |
 | --- | --- | --- |
-| A — stateless baseline | Текущий код и одинаковые исходные обычные docs | Код меняется по задачам; межсессионной агентной памяти нет |
-| B — memory | A + история и retrieval | Опыт можно сохранять и извлекать; отдельный механизм пересмотра/эволюции отключён |
-| C — evolutionary knowledge | B + provenance, commitments, ожидаемые и фактические outcomes, reconsideration | Развивается семантическое состояние; автоматическая эволюция harness запрещена |
-| D — full evolutionary environment | C + изменение policies, tools, invariants и context compiler | Изменения среды проверяются и версионируются, включая удаление ненужного |
+| A — stateless baseline | Current code and the same initial ordinary docs | Code changes through tasks; there is no agent memory across sessions |
+| B — memory | A + history and retrieval | Experience may be stored and retrieved; a separate reconsideration/evolution mechanism is disabled |
+| C — evolutionary knowledge | B + provenance, commitments, expected and actual outcomes, reconsideration | Semantic state evolves; automatic harness evolution is prohibited |
+| D — full evolutionary environment | C + changes to policies, tools, invariants, and the context compiler | Environment changes are verified and versioned, including removal of what is no longer needed |
 
-Для каждого условия заранее описать, что именно считается обычными docs, памятью, инструментом и изменением приложения: иначе A незаметно получает C, а B превращается в D. Общее исправление кода по заданию доступно всем условиям; изменение инструментария решения задач принадлежит D. Исходный harness, доступ к внешним инструментам и базовый бюджет одинаковы; адаптации D являются исследуемым вмешательством и входят в стоимость.
+For each condition, define in advance exactly what counts as ordinary docs, memory, a tool, and an application change; otherwise A can quietly acquire C, and B can become D. Ordinary code changes required by a task are available to all conditions; changes to the tooling used to solve tasks belong to D. The initial harness, access to external tools, and base budget are identical; D's adaptations are the intervention under study and are included in its cost.
 
-Единица назначения условия — независимая траектория проекта, а не отдельная задача: накопленное состояние делает последовательные задачи зависимыми. Начальные snapshots идентичны в пределах проекта. Несколько реплик/seed и проектов, сбалансированное назначение, одинаковая последовательность задач или заранее заданные сопоставимые последовательности. Порядок учитывает реальные зависимости, а не перемешивается произвольно.
+The unit of condition assignment is an independent project trajectory, not an individual task: accumulated state makes sequential tasks dependent. Initial snapshots are identical within a project. Use multiple replicas/seeds and projects, balanced assignment, and an identical task sequence or prespecified comparable sequences. Task order respects real dependencies rather than being shuffled arbitrarily.
 
-Задачи включают изменение требований, возврат в знакомые компоненты, нарушение прошлых assumptions и архитектурные изменения. Ранние и поздние checkpoint-оценки сопоставимы по сложности. Обучающие задачи, пилотные данные и evaluation holdout разделены до запуска.
+Tasks include requirements changes, returns to familiar components, violations of past assumptions, and architectural changes. Early and late checkpoint evaluations are comparable in difficulty. Training tasks, pilot data, and the evaluation holdout are separated before the run.
 
-## 3. Утечки и независимая оценка
+## 3. Leakage and independent evaluation
 
-Holdout-решения, скрытые тесты и оценочные рубрики недоступны агенту и context compiler. Между условиями не копируются memories, исправления, производные инструменты или опыт evaluator. Изоляция включает файловые каталоги, retrieval-индексы и внешнюю память агента. Разрешённая обратная связь по тренировочным задачам одинакова и описана заранее.
+Holdout solutions, hidden tests, and evaluation rubrics are unavailable to the agent and context compiler. Memories, fixes, derived tools, and evaluator experience are not copied between conditions. Isolation covers file directories, retrieval indexes, and the agent's external memory. Permitted feedback on training tasks is identical and specified in advance.
 
-Не использовать скрытый holdout многократно для настройки протокола. Пилот и настройка идут на отдельных данных. Если требуется адаптивная оценка, резервируется новый holdout, а прежний помечается раскрытым. Метрики генератора и evaluator не должны редактироваться исследуемым kernel; улучшение самооценки без внешней проверки не считается улучшением качества.
+Do not repeatedly use the hidden holdout to tune the protocol. Pilot work and tuning use separate data. If adaptive evaluation is needed, reserve a new holdout and mark the previous one as exposed. Generator and evaluator metrics must not be editable by the kernel under study; improvement in self-evaluation without external verification does not count as improved quality.
 
-Оценка опирается на независимые тесты и слепую к условию рубрику там, где тестов недостаточно. Дополнительная LLM-рецензия сама по себе не гарантирует независимость. Субъективное удобство человека хранится как субъективная оценка, без подмены метрики корректности.
+Evaluation relies on independent tests and a rubric applied blind to condition where tests are insufficient. An additional LLM review does not by itself guarantee independence. Subjective human convenience is retained as a subjective assessment, without substituting it for a correctness metric.
 
-## 4. Метрики и стоимость
+## 4. Metrics and cost
 
-До основного запуска выбрать одну первичную метрику, основной контраст, checkpoints, правила агрегации и критерий остановки. Кандидат: доля задач с независимым подтверждением результата при фиксированном полном бюджете. До фиксации этих параметров подтверждающий эксперимент не начинается.
+Before the main run, select one primary metric, the primary contrast, checkpoints, aggregation rules, and a stopping criterion. One candidate is the proportion of tasks whose results are independently confirmed under a fixed full budget. The confirmatory experiment does not begin until these parameters are fixed.
 
-| Измерение | Что сохранять |
+| Dimension | What to retain |
 | --- | --- |
-| Результат | Успех по независимой проверке; частичный успех по заданной рубрике; failures и пропуски |
-| Регрессии | Новые дефекты, тяжесть, повторение известной ошибки; единый способ обнаружения |
-| Стоимость | Токены/запросы, фактическая цена, wall-clock и active time, compute/tool costs |
-| Работа с контекстом | Время и токены навигации, объём поданного контекста, стоимость компиляции/хранения |
-| Развитие среды | Время создания, проверки и поддержки tools/policies/invariants; удаление и число лишних вмешательств |
-| Человек | Число escalations, минуты работы, причина помощи, содержание вмешательства, автор решения |
-| Изменение проекта | Change coupling по заранее выбранной мере; изменённые модули; сложность задач |
-| Объяснимость и пересмотр | Верность причин прежнего решения; обнаружение obsolete commitments; ложные тревоги |
-| Калибровка | Соответствие заранее записанных ожиданий outcome; неопределённость и задержка эффекта |
-| Воспроизводимость | Model/provider/version, параметры, harness/kernel/protocol commit, compiler/tool versions, seed и snapshot данных |
+| Result | Success under independent verification; partial success under a specified rubric; failures and omissions |
+| Regressions | New defects, severity, recurrence of a known error; a uniform detection method |
+| Cost | Tokens/requests, actual price, wall-clock and active time, compute/tool costs |
+| Context handling | Navigation time and tokens, amount of supplied context, compilation/storage cost |
+| Environment evolution | Time to create, verify, and maintain tools/policies/invariants; removal and the number of unnecessary interventions |
+| Human | Number of escalations, work minutes, reason for assistance, intervention content, decision author |
+| Project change | Change coupling under a prespecified measure; changed modules; task complexity |
+| Explainability and reconsideration | Fidelity to the reasons for an earlier decision; detection of obsolete commitments; false alarms |
+| Calibration | Agreement between expectations recorded in advance and outcomes; uncertainty and effect delay |
+| Reproducibility | Model/provider/version, parameters, harness/kernel/protocol commit, compiler/tool versions, seed, and data snapshot |
 
-Нужно учитывать полную стоимость и окупаемость на горизонте: ускорение выполнения при более дорогом обслуживании среды не означает чистую пользу. Равный бюджет и естественно потреблённый бюджет отвечают на разные вопросы; представить оба только если это предусмотрено дизайном.
+Account for full cost and payoff over the time horizon: faster execution with more expensive environment maintenance does not imply a net benefit. Equal budgets and naturally consumed budgets answer different questions; present both only if the design provides for this.
 
-## 5. Confounders и анализ
+## 5. Confounders and analysis
 
-Основные смешения: поздние задачи проще; человек научился и помогает больше; растёт контекстный бюджет; провайдер обновил модель; compiler получил будущие решения; изменился evaluator; внешние зависимости или hardware изменили время; D получает больше попыток; неуспешные траектории исключены; сам код накопил решения, полезные всем условиям.
+Key confounders: later tasks are easier; the human has learned and provides more help; the context budget grows; the provider updates the model; the compiler receives future solutions; the evaluator changes; external dependencies or hardware change timing; D gets more attempts; unsuccessful trajectories are excluded; the code itself accumulates solutions useful to all conditions.
 
-Фиксировать или балансировать эти факторы, а остаточные ограничения раскрывать. Нельзя считать задачи одной траектории независимыми репликациями: анализ учитывает проект/траекторию как кластер и последовательную зависимость. Показать эффект с интервалом неопределённости, полные затраты, траекторию по checkpoints и все назначенные реплики, включая остановленные. Правила пропусков, исключений, множественных сравнений и досрочной остановки фиксируются до просмотра основных результатов.
+Fix or balance these factors and disclose residual limitations. Tasks within one trajectory must not be treated as independent replications: the analysis accounts for the project/trajectory as a cluster and for sequential dependence. Report the effect with an uncertainty interval, full costs, the trajectory across checkpoints, and every assigned replica, including stopped ones. Rules for missing data, exclusions, multiple comparisons, and early stopping are fixed before inspecting the main results.
 
-Новые изменения протокола, подсказанные dogfooding, являются предметом отдельного опыта и версией метода. Подтверждающий эксперимент не должен незаметно оптимизировать собственный критерий успеха. Model-upgrade replay возможен позднее как отдельный вопрос: может ли более новая модель безопасно убрать устаревшую обвязку? Он не смешивается с fixed-model H1.
+New protocol changes suggested by dogfooding are the subject of a separate experiment and method version. A confirmatory experiment must not quietly optimize its own success criterion. Model-upgrade replay may later address a separate question: can a newer model safely remove obsolete scaffolding? It is not combined with fixed-model H1.
 
-## 6. Retention и границы вывода
+## 6. Retention and limits of inference
 
-Собирать достаточно измерений для назначенного эксперимента, без накопления всех диалогов и телеметрии по умолчанию. До запуска определить sampling, сроки хранения, доступ и минимальный набор для воспроизведения. Сохранять существенные отрицательные и прерванные результаты; удаление чувствительного источника не маскировать под сохранённый provenance. Производные выводы должны отражать недоступность основания.
+Collect enough measurements for the assigned experiment without retaining all conversations and telemetry by default. Before running, define sampling, retention periods, access, and the minimum set needed for reproduction. Retain significant negative and interrupted results; do not disguise deletion of a sensitive source as preserved provenance. Derived conclusions must reflect unavailable grounds.
 
-Ни текущий bootstrap, ни одна успешная рекурсивная итерация не подтверждают научную новизну, универсальность, причинное улучшение или бесконечное развитие. Обзор литературы и проверка цитат источников — отдельная будущая работа. Публикация возможна после данных и воспроизводимого анализа; сейчас никаких внешних действий не выполняется.
+Neither the current bootstrap nor one successful recursive iteration confirms scientific novelty, universality, causal improvement, or endless development. A literature review and verification of source citations are separate future work. Publication is possible after data and reproducible analysis; no external actions are being performed at this stage.
 
-Открыто до эмпирического запуска: набор проектов и задач, точная модель, бюджет, размер выборки, минимально полезный эффект, первичная метрика, blind evaluator, holdout и retention. Это граница подготовленного протокола, а не скрыто завершённая работа.
+Still open before the empirical run: project and task sets, exact model, budget, sample size, minimum useful effect, primary metric, blind evaluator, holdout, and retention. This is the boundary of the prepared protocol, not work silently treated as complete.

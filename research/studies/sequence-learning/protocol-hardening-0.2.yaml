@@ -1,0 +1,39 @@
+schema: ekk.study-amendment/0.1
+id: sequence-learning-hardening-0.2
+amends: sequence-learning
+status: not_run
+comparison:
+  equal_budget: true
+  shared_inputs: [model, tools, source_tree, product_requirements, evaluator]
+  strong_baseline: Same engineered workflow and total budget, without the EKK mechanism being isolated.
+  ablations: [additional_compute, provenance_history, selective_review, method_evolution]
+adversarial_cases:
+  - persuasive_false_explanation
+  - obsolete_rule
+  - correlated_sources_repeating_one_error
+  - conflicting_active_decisions
+  - missing_required_information
+  - unnecessary_refactor
+  - correct_action_is_not_learning_from_an_unrepresentative_episode
+primary_metric:
+  name: acceptable_product_outcome_without_substantial_manual_rework
+  unit: fraction_of_comparable_tasks
+  report_with: [incoming_task_coverage, observation_coverage, total_lifecycle_cost, failure_severity, later_regressions]
+integrity:
+  preserve_all_failures: true
+  independent_evaluator: true
+  evaluator_outside_candidate_write_authority: true
+  new_transfer_tasks: required
+  freeze_before_run: [tasks, criteria, model, evaluator, budgets, manual_rework_threshold, observation_window, falsification_conditions]
+falsification_conditions:
+  - Explainability improves but acceptable product outcomes do not.
+  - Benefit disappears under equal total budget.
+  - Repeated errors fall but blocked correct changes or regression severity exceed the frozen bound.
+  - Gains do not transfer to held-out tasks.
+scope:
+  workflow_embedded: true
+  total_migration_required: false
+limitations:
+  - Provenance does not establish truth.
+  - Observation does not establish causality.
+  - Format portability does not imply equal competence or result quality.

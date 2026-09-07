@@ -1,7 +1,7 @@
 # public-ekk-example
 
-Синтетический пример отдельного realm, не действующая база.
+A synthetic example of a separate realm, not an active database.
 
-Ведение публичной разработки и исследований EKK.
+Managing public EKK development and research.
 
-ID, владелец и правила подлежат замене при создании реальной установки.
+Replace the IDs, owner, and rules when creating a real installation.

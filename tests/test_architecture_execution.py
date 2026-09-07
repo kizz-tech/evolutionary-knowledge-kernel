@@ -61,7 +61,8 @@ class ArchitectureExecutionTests(unittest.TestCase):
         result = self.adapter().execute('solve', {'blocked':False})
         self.assertEqual(result['status'], 'verification_failed')
         self.assertEqual(result['verification']['returncode'], 4)
-        self.assertEqual(result['stages']['observed'], 'observed_failure')
+        self.assertEqual(result['stages']['implementation'], 'failed')
+        self.assertEqual(result['stages']['observed'], 'not_observed')
 
     def test_timeout_records_actual_command_and_no_verification(self):
         self.solve.write_text('import time\ntime.sleep(2)\n')
@@ -120,7 +121,8 @@ class ArchitectureExecutionTests(unittest.TestCase):
         metadata = dict(experiment_id='e', protocol_version='p', hypothesis='H2', task_family='fixture', task_id='task', trajectory_id='trajectory', condition='text', split='pilot', replica=0, seed=0, model_id='none:deterministic', model_revision='n/a', harness_version='1', kernel_version='1', compiler_version='1', evaluator_version='1', environment_id='candidate', evaluator_environment_id='trusted', realm_snapshots={'fixture':'v1'}, policy_versions={'fixture':'v1'}, knowledge_digests=(), capability_digests=(), rehearsal=True)
         outcome = coordinator.run('solve', {'blocked':False}, metadata)
         self.assertEqual(outcome['stages']['knowledge'], 'pending_reconciliation')
-        self.assertEqual(outcome['stages']['observed'], 'verified_result')
+        self.assertEqual(outcome['stages']['implementation'], 'verified')
+        self.assertEqual(outcome['stages']['observed'], 'not_observed')
         report = coordinator.finish()
         self.assertEqual(report['records'][0]['outcome'], 'success')
         self.assertEqual(len(reports), 1)

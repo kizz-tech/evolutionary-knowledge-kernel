@@ -1,7 +1,7 @@
 cff-version: 1.2.0
-message: "Проектный пример. Перед выпуском подтвердите авторов и метаданные; опубликованных результатов пока нет."
+message: "Design example. Confirm authors and metadata before release; there are no published results yet."
 title: "EKK: Evolutionary Knowledge Kernel"
 type: software
 authors:
-  - name: "Максим"
-abstract: "Проектная спецификация, файловые примеры и read-only валидатор. Полноценный runtime ещё не реализован."
+  - name: "Maxim"
+abstract: "Design specification, file examples, and a read-only validator. A full runtime is not implemented yet."

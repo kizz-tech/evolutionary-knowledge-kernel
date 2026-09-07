@@ -1,60 +1,66 @@
-# Implementation evidence
+# Implementation and English publication evidence for 0.5
 
-The model-effectiveness study has not run. These results concern the local
-implementation and synthetic installation checks only.
+The current direction adds personal work entry, shared continuity and a bounded
+method lifecycle. The model-effectiveness study is designed but has not run.
 
-## Baseline checked before this publication pass
+The disposable two-participant demonstration passes twelve assertions: private
+intent stays personal, shared continuity survives restart, an exact exported
+method needs receiver-owned evaluation and acceptance, changed conditions expose
+a failure, quarantine blocks use, retirement preserves history, and a new revision
+works on the changed task. It makes no model calls or external deliveries.
 
-Runtime 0.4.0 at development revision `40e67473bfdc6cc9b4096fe361700a56a44da983`
-passed 265 runtime tests, 18 original starter tests, and the historical replay.
-The runtime suite took 375.523 seconds. A fresh wheel installation passed ten
-common-envelope operation cases, including retries and key-conflict rejection;
-ten bundled canonical schemas/pack resources matched their source bytes.
+On 2026-09-07 the broad current-runtime suite passed **210 tests** in 1433.602
+seconds. The final review then hardened deleted-evaluation handling, post-execution
+canonical revocation, stale admission and workspace offers. A final focused suite
+passed **57 tests** in 684.627 seconds, covering all method lifecycle/transfer/CLI
+tests, workspace entry, current CLI, discovery and context display. Four new test
+cases were added; the complete source now contains 214 tests. The broad suite was
+not repeated after these bounded changes.
 
-This is historical development evidence, not a public Git commit reference.
-The clean release has its own history. Release documentation, packaging metadata,
-and the compact context display were subsequently updated; final export checks
-are recorded below. Private migration and operational reports are excluded.
+The original starter suite passed **18 tests**, the active research protocol
+validator passed **6 tests**, the export boundary passed **5 tests**, and explicit
+historical replay passed its checks. All **73** original starter manifest hashes
+matched before localization; translated fixtures now have separate manifests. Historical runtime sources and superseded local designs have separate
+preservation manifests; earlier 0.4 results do not validate 0.5.
 
-## Publication candidate checks
+A fresh non-editable wheel installation passed dependency checks, the complete
+lower-level CLI quickstart, and the twelve-check method-transfer demonstration
+with fresh worker processes. It loaded from installed site-packages under Python
+3.13.5 without inherited EKK configuration. Every installed Python source matches
+the final runtime, all ten canonical schema/pack resources match their source
+bytes, and legacy/admin runtime modules are absent. The active project context
+also resolves the accepted 0.5 direction without a blocked result.
 
-On 2026-09-07 the frozen candidate passed **272 runtime tests** in
-519.511 seconds with no failures or errors, **18 original starter tests**, and
-the historical functional replay. All **73** files in the original starter
-manifest matched their declared hashes.
+Before localization, the SHA-256 of the sorted compact JSON map of all `src/ekk/**/*.py`,
+`tests/test_*.py` and `pyproject.toml` paths and their hashes is
+`9366823dc2c1e61cab5a301fabef626e44ae0cb2b975f6f9fee9c942290b4d05`.
+Serialize that map with sorted keys and separators `(',', ':')`. This identifies
+the pre-localization inputs covered by the broad suite plus final focused checks; it does
+not claim a second full-suite run. Those results precede the English publication pass. The English candidate is
+validated separately below; its pack and fixture digests intentionally differ.
 
-A final CLI discovery correction followed that full run: current top-level help
-and version output, current unbound entry on a fresh installation, and
-command-first recovery routing. After this correction, **46 focused tests** passed
-in 28.661 seconds, covering the new entrypoint, existing legacy CLI, historical
-integration and registry compatibility, current CLI, and source-export boundary.
-The complete 272-test suite was not repeated after this narrow routing change.
+Local checks do not establish human understanding, model improvement, external
+source truth or production outcomes. The writer uses POSIX facilities; native
+Windows has not been validated. Profiles route access but do not isolate
+processes sharing a filesystem. There is no hosted IAM or automatic conversation
+capture. Real company activation and publication are separate owner actions.
 
-A fresh non-editable installation from the final code passed the full disposable
-CLI quickstart, current version output, and dependency checks. It imported from
-installed site-packages with Python 3.13.5. The driver checks exact-byte capture,
-retry identity, scoped context, snapshot-pinned proposal/application, read-back,
-and doctor. No inherited EKK profile or store is used.
+## English publication candidate
 
-After removing a machine-specific identifier from the export guard, its five
-boundary tests passed again.
+On 2026-09-07 the complete English candidate passed **215 runtime tests** in
+742.983 seconds, **18 starter tests**, **6 research-protocol tests**, and
+**6 export/language/provenance checks**. Historical replay passed all four checks.
+The starter and historical-runtime hash manifests were verified after translation.
+Internal documentation links resolve, and the complete public text tree contains
+no Cyrillic. Per-file source provenance distinguishes exact historical originals
+from the English edition.
 
-The source suites selected the frozen `src/` through `PYTHONPATH`; subprocesses
-inherited that source selection. Test/build artifacts are excluded from the final
-export. Current release documentation was finalized after the checks. Private
-operational reports and development Git history are not shipped.
+A fresh non-editable English wheel installation passed dependency checks, the
+isolated CLI quickstart and the twelve-check two-participant method demonstration.
+Every wheel Python source and all ten schema/pack resources match the candidate.
+Tests used Python 3.13.5. These checks validate implementation and localization;
+they do not establish a real model or human benefit.
 
-The SHA-256 of the sorted compact JSON map of the final runtime/test input paths
-and their hashes is `5cce91d2287bb1a636df502509d82aaa39c0cf586ae7ed88778c3b9be5be3c23`. Reconstruct it from `export-manifest.json` by
-selecting `src/`, `tests/`, `spec/`, `packs/`, `pyproject.toml`, `requirements.lock`,
-and `examples/quickstart.py`; serialize with sorted keys and separators `(',', ':')`.
-This identifies the final source covered by the baseline plus focused regression
-checks; it does not claim a second complete suite run on these final bytes.
-
-## Limits
-
-Local tests do not establish model improvement, external source truth, or
-production outcomes. The writer uses POSIX facilities; native Windows was not
-validated. Local profiles are routing controls, not isolation from other processes
-with access to the same disk. No hosted IAM or always-on conversation capture is
-included. Negative empirical results remain possible.
+The final English runtime/test input-map SHA-256, using the same path selection
+and compact serialization described above, is
+`47342314cd84960cd8f8d2a6a6d64c52c1bf1b318670ddb45596c1b6c71c9528`.

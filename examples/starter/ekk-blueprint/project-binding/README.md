@@ -1,5 +1,5 @@
-# Шаблон подключения, не новый репозиторий данных
+# Connection template, not a new data repository
 
-Поместите `.ekk/workspace.yaml` в существующий репозиторий продукта после замены IDs.
-Содержимое AGENTS.md объедините с уже существующей точкой входа, не затирая её.
-Не копируйте сюда `records/` корпоративного realm ради подключения.
+Place `.ekk/workspace.yaml` in the existing product repository after replacing the IDs.
+Merge the contents of AGENTS.md into the existing entry point without overwriting it.
+Do not copy the corporate realm's `records/` here merely to connect it.

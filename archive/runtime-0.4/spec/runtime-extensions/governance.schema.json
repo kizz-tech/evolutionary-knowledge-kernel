@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ekk:schema:governance:0.1",
+  "title": "EKK governance 0.1",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "ekk.governance/0.1"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "owner": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$"
+    },
+    "grants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "principal": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "read",
+                "write",
+                "accept"
+              ]
+            },
+            "minItems": 1
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "principal",
+          "actions",
+          "scopes"
+        ],
+        "additionalProperties": true
+      },
+      "minItems": 0
+    },
+    "export_grants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": true
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "schema",
+    "version",
+    "owner",
+    "grants",
+    "export_grants"
+  ],
+  "additionalProperties": true
+}
