@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "evolutionary-knowledge-kernel"
-version = "0.5.0"
-description = "Personal work entry, shared continuity and transferable revisable methods"
+version = "0.7.0"
+description = "Shared continuity, revisable methods and experimental action readiness"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
 readme = "README.md"

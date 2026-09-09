@@ -13,8 +13,10 @@ from jsonschema import Draft202012Validator, FormatChecker
 MAX_DOCUMENT_BYTES = 2 * 1024 * 1024
 MAX_NODES = 100_000
 MAX_DEPTH = 64
-MAX_PARSE_CACHE_ENTRIES = 2048
-MAX_PARSE_CACHE_BYTES = 16 * 1024 * 1024
+# A migrated realm can exceed 2,048 records; current and historical decoding
+# have separate alias modes. Keep both scans warm within a bounded local cache.
+MAX_PARSE_CACHE_ENTRIES = 8192
+MAX_PARSE_CACHE_BYTES = 64 * 1024 * 1024
 
 
 def _retained_size(value):

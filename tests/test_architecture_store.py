@@ -159,6 +159,24 @@ store.apply({'records/a.md': b'two'}, base=sys.argv[2], idempotency_key='exit', 
                 self.apply(store, base=base, changes={"records/0.md": b"updated"})
                 self.assertLess(git.call_count, 55)
 
+    def test_large_batch_input_and_binary_output_complete_without_pipe_deadlock(self):
+        script = """
+import sys
+from ekk.adapters.git_store import GitStore
+store = GitStore(sys.argv[1])
+blob = bytes(range(256)) * 8
+oid = store._git('hash-object', '-w', '--stdin', data=blob).stdout.strip()
+count = 2048
+output = store._git('cat-file', '--batch', data=(oid+b'\\n')*count).stdout
+frame = oid+b' blob '+str(len(blob)).encode()+b'\\n'+blob+b'\\n'
+assert output == frame*count
+print('large-binary-batch-ok')
+"""
+        result = subprocess.run([sys.executable, '-c', script, str(self.path)],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual('large-binary-batch-ok\n', result.stdout)
+
     def test_lost_runtime_journal_recovers_receipt_and_projection(self):
         import shutil
         def crash(stage):

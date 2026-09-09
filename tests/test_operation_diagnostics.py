@@ -1,0 +1,173 @@
+"""Host attribution and owning publication/transport observation boundaries."""
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from ekk.adapters.command_line import dispatch, parser, service
+from ekk.adapters.operation_diagnostics import observed_call, trusted_caller
+from ekk.adapters.operation_journal import OperationJournal
+from ekk.model import Conflict
+
+
+class DiagnosticIntegrationTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory(); self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name).resolve()
+        env = patch.dict(os.environ, {'EKK_DATA_HOME': str(self.root/'data'),
+            'EKK_CONFIG_HOME': str(self.root/'config'), 'EKK_CACHE_HOME': str(self.root/'cache')})
+        env.start(); self.addCleanup(env.stop)
+        self.config = self.root/'config'; self.config.mkdir(mode=0o700)
+
+    def call(self, op, request=None, *, render=None, **options):
+        args = [op, '--root', str(self.root/'realm')]
+        if op != 'init': args += ['--scope', 'scope']
+        return dispatch(parser().parse_args(args), request or {}, render=render)
+
+    def rows(self):
+        path = self.root/'data/operations/operations.jsonl'
+        return [row for row in map(json.loads, path.read_text().splitlines()) if 'attempt_id' in row]
+
+    def test_four_registered_caller_environments_and_unknown_are_distinct(self):
+        names = ['alpha', 'beta', 'gamma', 'delta']
+        fleet = {'schema_version':'lifeos.codex-profile-fleet/1',
+                 'profiles': {name:{'home':str(self.root/name)} for name in names}}
+        (self.root/'fleet.json').write_text(json.dumps(fleet))
+        config = {'schema':'ekk.callers/0.1', 'codex_profile_fleet': str(self.root/'fleet.json'),
+                  'adapters':['private-gateway']}
+        path = self.config/'callers.yaml'; path.write_text(json.dumps(config)); path.chmod(0o600)
+        for name in names:
+            with patch.dict(os.environ, {'CODEX_HOME':str(self.root/name), 'EKK_PROFILE':'unrelated-role'}):
+                self.assertEqual(name, trusted_caller().profile)
+                observed_call('context', lambda:{'ok':True})
+        with patch.dict(os.environ, {'CODEX_HOME':str(self.root/'unregistered')}):
+            self.assertIsNone(trusted_caller())
+            observed_call('context', lambda:{'ok':True})
+        self.assertEqual(set(names+['unknown']), {row['caller_profile'] for row in self.rows()})
+        self.assertEqual('private-gateway', trusted_caller('private-gateway').profile)
+        self.assertIsNone(trusted_caller('alpha'))
+        self.assertNotIn(str(self.root), json.dumps(self.rows()))
+
+    def test_bad_caller_configuration_warns_without_preventing_domain_work(self):
+        path = self.config/'callers.yaml'; path.write_text('null\n'); path.chmod(0o600)
+        calls = []
+        result = observed_call('context', lambda: calls.append(True) or {'result':'known'})
+        self.assertEqual([True], calls)
+        self.assertEqual('known', result['result'])
+        self.assertTrue(result['warnings'])
+        path.write_text(json.dumps({'schema':'ekk.callers/0.1','adapters':'secret-profile'}))
+        with self.assertRaises(ValueError): trusted_caller('secret')
+
+    def test_init_apply_accept_and_replay_have_owning_mutation_evidence(self):
+        self.call('init', {'context_id':'scope'})
+        app = service(self.root/'realm')
+        context_raw = app.store.snapshot()['files']['contexts/scope.md']
+        basis = {'id':'scope','revision':1,'digest':'sha256:'+__import__('hashlib').sha256(context_raw).hexdigest()}
+        metadata = app._meta('decision', 'Check bytes', ['scope'], basis=[basis], commitment={'expectation':'Exact bytes'})
+        raw = app.codec.encode(metadata)
+        proposal = app.propose({'records/decision.md': raw})
+        request = {'proposal':proposal, 'idempotency_key':'apply'}
+        receipt = self.call('apply', request)
+        self.assertEqual(receipt, self.call('apply', request))
+        ref = {'realm':app.initial_realm_id, 'id':metadata['id'], 'revision':1,
+               'digest':'sha256:'+__import__('hashlib').sha256(raw).hexdigest()}
+        accepted = self.call('accept', {'references':[ref], 'expected_snapshot':receipt['revision'],
+                                      'idempotency_key':'accept'})
+        self.assertEqual('published', accepted['state'])
+        rows = self.rows()
+        self.assertEqual([True,True,False,True], [row['mutated'] for row in rows])
+        self.assertEqual([False,False,True,False], [row['replayed'] for row in rows])
+
+    def test_request_route_and_response_failures_keep_observed_stage(self):
+        self.call('init', {'context_id':'scope'})
+        with self.assertRaises(ValueError): self.call('capture', {'body':'secret request text'})
+        args = parser().parse_args(['context','--profile','absent','--realm','absent'])
+        with self.assertRaises(ValueError): dispatch(args, {})
+        app = service(self.root/'realm')
+        proposal = app.capture(b'original',title='Source',scope=['scope'])
+        def lost(_): raise OSError('synthetic response unavailable')
+        with self.assertRaises(OSError):
+            self.call('apply', {'proposal':proposal,'idempotency_key':'published'}, render=lost)
+        failures = [row for row in self.rows() if row['result']=='error']
+        self.assertEqual(['request','routing','response'], [row['failure_stage'] for row in failures])
+        self.assertTrue(failures[-1]['mutated'])
+        self.assertNotIn('secret request text', json.dumps(self.rows()))
+        self.assertNotIn('synthetic response unavailable', json.dumps(self.rows()))
+
+    def test_diagnostic_completion_failure_never_repeats_domain_callback(self):
+        calls=[]
+        with patch.object(OperationJournal,'finish',side_effect=OSError('metadata offline')):
+            result=observed_call('apply',lambda:calls.append(True) or {'state':'published','revision':'a'*40})
+        self.assertEqual([True], calls)
+        self.assertEqual('published', result['state'])
+        self.assertTrue(result['warnings'])
+
+    def test_recovery_of_other_key_is_separate_from_failed_or_successful_caller(self):
+        self.call('init', {'context_id':'scope'})
+        store = service(self.root/'realm').store
+        for stage, succeeds in [('prepared', False), ('published', True)]:
+            before = store.snapshot()['revision']
+            key_a, key_b = 'a-'+stage, 'b-'+stage
+            def crash(current):
+                if current == stage: raise OSError('interrupted publication')
+            with patch.object(store, '_checkpoint', side_effect=crash):
+                with self.assertRaises(OSError):
+                    observed_call('apply', lambda:store.apply({key_a+'.txt':b'a'}, base=before,
+                        idempotency_key=key_a, principal='tester', policy_digest='a'*64), key=key_a)
+            base_b = store.snapshot()['revision'] if succeeds else before
+            prior = {row['attempt_id'] for row in self.rows()}
+            def apply_b():
+                return store.apply({key_b+'.txt':b'b'}, base=base_b,
+                    idempotency_key=key_b, principal='tester', policy_digest='a'*64)
+            if succeeds:
+                receipt = observed_call('apply', apply_b, key=key_b)
+            else:
+                with self.assertRaises(Conflict): observed_call('apply', apply_b, key=key_b)
+            new = [row for row in self.rows() if row['attempt_id'] not in prior]
+            self.assertEqual(2, len(new))
+            caller = next(row for row in new if row['operation'] == 'apply')
+            recovery = next(row for row in new if row['operation'] == 'recover')
+            self.assertEqual('apply', caller['operation'])
+            self.assertEqual('recover', recovery['operation'])
+            self.assertEqual(succeeds, caller['mutated'])
+            self.assertFalse(caller['replayed'])
+            if not succeeds: self.assertIsNone(caller['final_snapshot'])
+            self.assertEqual(not succeeds, recovery['mutated'])
+            self.assertEqual(succeeds, recovery['replayed'])
+
+    def test_same_key_recovery_preserves_owning_publication(self):
+        self.call('init', {'context_id':'scope'})
+        store = service(self.root/'realm').store
+        base = store.snapshot()['revision']
+        def write():
+            return store.apply({'own.txt':b'a'}, base=base, idempotency_key='same',
+                principal='tester', policy_digest='a'*64)
+        def crash(stage):
+            if stage == 'prepared': raise OSError('interrupted')
+        with patch.object(store, '_checkpoint', side_effect=crash):
+            with self.assertRaises(OSError): observed_call('apply', write, key='same')
+        observed_call('apply', write, key='same')
+        row = self.rows()[-1]
+        self.assertTrue(row['mutated'])
+        self.assertFalse(row['replayed'])
+        self.assertNotIn('recover', [item['operation'] for item in self.rows()])
+
+    def test_early_branches_do_not_mislabel_route_and_store_errors_as_request(self):
+        self.call('init', {'context_id':'scope'})
+        with self.assertRaises(Conflict): self.call('init', {'context_id':'scope'})
+        for argv in [
+            ['enter','--personal','--profile','absent','--cwd',str(self.root/'unbound')],
+            ['init','--workspace','--realm','absent','--scope','scope','--profile','absent'],
+            ['backup','--profile','absent','--realm','absent','--destination',str(self.root/'backup')],
+            ['restore','--profile','absent','--realm','absent','--destination',str(self.root/'copy')],
+        ]:
+            with self.assertRaises((ValueError, PermissionError)):
+                dispatch(parser().parse_args(argv), {})
+        failures = [row for row in self.rows() if row['result'] in {'error','conflict'}]
+        self.assertEqual(['store','routing','routing','routing','routing'],
+                         [row['failure_stage'] for row in failures])
+
+
+if __name__=='__main__': unittest.main()

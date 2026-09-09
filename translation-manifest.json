@@ -1,1004 +1,744 @@
 {
+  "edition": "0.7.0",
   "files": [
     {
-      "origin": {
-        "identity": "sha256:12e094fda0c0fd76cbd2f125b93f22a21c5bb27aec8a86021cd151b9fb9a3e9b",
-        "kind": "owner_preserved_source"
-      },
-      "original_path": "CITATION.cff",
-      "original_sha256": "12e094fda0c0fd76cbd2f125b93f22a21c5bb27aec8a86021cd151b9fb9a3e9b",
-      "path": "CITATION.cff",
-      "sha256": "9f417a81d75b81db2898012f9a5a59d4ffaa406f3bf225b2d3f6e28f5f98f759"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "adapters/README.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "adapters/README.md",
       "original_sha256": "765bf412941eca660a742c2dac824f9b964bd53f2df6d6eb8b6e43730e02e7e4",
       "path": "adapters/README.md",
       "sha256": "2358e6a52dbae6b4a59c4cb85a0bad58f4d2a362c1ca80184ff67c8f96e4237e"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/adapters/README.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ekk/adapters/README.md",
-      "original_sha256": "765bf412941eca660a742c2dac824f9b964bd53f2df6d6eb8b6e43730e02e7e4",
-      "path": "examples/starter/ekk-blueprint/ekk/adapters/README.md",
-      "sha256": "2358e6a52dbae6b4a59c4cb85a0bad58f4d2a362c1ca80184ff67c8f96e4237e"
+      "method": "reused_verified_english",
+      "original_path": "archive/runtime-0.4/MANIFEST.sha256.json",
+      "original_sha256": "dda438d6cee2dd0ee2d3c4b34e65e06a2aecd59cb9ca173ec24e4ed4bcc00f10",
+      "path": "archive/runtime-0.4/MANIFEST.sha256.json",
+      "sha256": "bb84c3b4c72409509a38f8cd69085693dc389a6c4fb6a56f8a8eefc359b4020c"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "packs/base/METHOD.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
+      "original_path": "archive/runtime-0.4/README.md",
+      "original_sha256": "4eeb30445dcd0085c09b2eecc18614398e8c96bce24d776345af8be43840822d",
+      "path": "archive/runtime-0.4/README.md",
+      "sha256": "e8fe3954ade73c190a905c13536a60fed773d2be93d8281fe2edb8af105054eb"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "archive/runtime-0.4/packs/README.md",
+      "original_sha256": "968008bf4caa4d4a4235cd1792fc224f1aaed3ae1d98a124db8bc5651fede04e",
+      "path": "archive/runtime-0.4/packs/README.md",
+      "sha256": "deaa7a01626cae782de6de73b81326c35840426941b248e7e90ee50c852037ad"
+    },
+    {
+      "method": "reused_verified_english",
       "original_path": "archive/runtime-0.4/packs/base/METHOD.md",
       "original_sha256": "346ab25c26cf4253482aff6bcf08eae18e25cca54504ce8a27825f57b7307cbc",
       "path": "archive/runtime-0.4/packs/base/METHOD.md",
       "sha256": "12c4649728b857c33b2f7ef42aa0a6b96d8d61aebaa020c586d723c2ea2d85fc"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/packs/base/METHOD.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ekk/packs/base/METHOD.md",
-      "original_sha256": "346ab25c26cf4253482aff6bcf08eae18e25cca54504ce8a27825f57b7307cbc",
-      "path": "examples/starter/ekk-blueprint/ekk/packs/base/METHOD.md",
-      "sha256": "12c4649728b857c33b2f7ef42aa0a6b96d8d61aebaa020c586d723c2ea2d85fc"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "packs/base/METHOD.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "packs/base/METHOD.md",
-      "original_sha256": "346ab25c26cf4253482aff6bcf08eae18e25cca54504ce8a27825f57b7307cbc",
-      "path": "packs/base/METHOD.md",
-      "sha256": "12c4649728b857c33b2f7ef42aa0a6b96d8d61aebaa020c586d723c2ea2d85fc"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "packs/base/pack.yaml",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "archive/runtime-0.4/packs/base/pack.yaml",
       "original_sha256": "ed71114feb573dfb080d986e2549f70cd11a5d45bd6166135f62cc0dfd4e9944",
       "path": "archive/runtime-0.4/packs/base/pack.yaml",
       "sha256": "62e1e9ae8bc217d13a13371fe7839bfeb4b4680170b17792a58a7ea85a86d666"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/packs/base/pack.yaml",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ekk/packs/base/pack.yaml",
-      "original_sha256": "ed71114feb573dfb080d986e2549f70cd11a5d45bd6166135f62cc0dfd4e9944",
-      "path": "examples/starter/ekk-blueprint/ekk/packs/base/pack.yaml",
-      "sha256": "62e1e9ae8bc217d13a13371fe7839bfeb4b4680170b17792a58a7ea85a86d666"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "packs/base/pack.yaml",
-        "tag": "v0.4.0"
-      },
-      "original_path": "packs/base/pack.yaml",
-      "original_sha256": "ed71114feb573dfb080d986e2549f70cd11a5d45bd6166135f62cc0dfd4e9944",
-      "path": "packs/base/pack.yaml",
-      "sha256": "62e1e9ae8bc217d13a13371fe7839bfeb4b4680170b17792a58a7ea85a86d666"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "packs/research/METHOD.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "archive/runtime-0.4/packs/research/METHOD.md",
       "original_sha256": "9d03d6f20a7c525db3aab8a0218e2c21831209bc9360a40cbfc23148c3614c99",
       "path": "archive/runtime-0.4/packs/research/METHOD.md",
       "sha256": "219aea334540785cd6d57299158da8724743ea308ae8aee63e848e61f39bc499"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/packs/research/METHOD.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ekk/packs/research/METHOD.md",
-      "original_sha256": "9d03d6f20a7c525db3aab8a0218e2c21831209bc9360a40cbfc23148c3614c99",
-      "path": "examples/starter/ekk-blueprint/ekk/packs/research/METHOD.md",
-      "sha256": "219aea334540785cd6d57299158da8724743ea308ae8aee63e848e61f39bc499"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "packs/research/METHOD.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "packs/research/METHOD.md",
-      "original_sha256": "9d03d6f20a7c525db3aab8a0218e2c21831209bc9360a40cbfc23148c3614c99",
-      "path": "packs/research/METHOD.md",
-      "sha256": "219aea334540785cd6d57299158da8724743ea308ae8aee63e848e61f39bc499"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "packs/research/pack.yaml",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "archive/runtime-0.4/packs/research/pack.yaml",
       "original_sha256": "bbac0c73f0c3ebe7f3eeee541341c753dcecaeae38375294f793823dfa85a70e",
       "path": "archive/runtime-0.4/packs/research/pack.yaml",
       "sha256": "058b54a2688007659eff06a82d718dc61e84a753adbe85b63b331be69d60ae43"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/packs/research/pack.yaml",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ekk/packs/research/pack.yaml",
-      "original_sha256": "bbac0c73f0c3ebe7f3eeee541341c753dcecaeae38375294f793823dfa85a70e",
-      "path": "examples/starter/ekk-blueprint/ekk/packs/research/pack.yaml",
-      "sha256": "058b54a2688007659eff06a82d718dc61e84a753adbe85b63b331be69d60ae43"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "packs/research/pack.yaml",
-        "tag": "v0.4.0"
-      },
-      "original_path": "packs/research/pack.yaml",
-      "original_sha256": "bbac0c73f0c3ebe7f3eeee541341c753dcecaeae38375294f793823dfa85a70e",
-      "path": "packs/research/pack.yaml",
-      "sha256": "058b54a2688007659eff06a82d718dc61e84a753adbe85b63b331be69d60ae43"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "packs/software/METHOD.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "archive/runtime-0.4/packs/software/METHOD.md",
       "original_sha256": "7de7522e743487df6897ee475de4b07574c3d42a79c7f0fb27d439a7da309dc0",
       "path": "archive/runtime-0.4/packs/software/METHOD.md",
       "sha256": "ed111e5426faf8c37bd65a62a735796c24a8871ab6ff52f6f62439275d66662e"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/packs/software/METHOD.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ekk/packs/software/METHOD.md",
-      "original_sha256": "7de7522e743487df6897ee475de4b07574c3d42a79c7f0fb27d439a7da309dc0",
-      "path": "examples/starter/ekk-blueprint/ekk/packs/software/METHOD.md",
-      "sha256": "ed111e5426faf8c37bd65a62a735796c24a8871ab6ff52f6f62439275d66662e"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "packs/software/METHOD.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "packs/software/METHOD.md",
-      "original_sha256": "7de7522e743487df6897ee475de4b07574c3d42a79c7f0fb27d439a7da309dc0",
-      "path": "packs/software/METHOD.md",
-      "sha256": "ed111e5426faf8c37bd65a62a735796c24a8871ab6ff52f6f62439275d66662e"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "packs/software/pack.yaml",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "archive/runtime-0.4/packs/software/pack.yaml",
       "original_sha256": "66a394bb2c7b8246c429063e74c65bf19b7bd82b9df10d837fb3ae1e327096d6",
       "path": "archive/runtime-0.4/packs/software/pack.yaml",
       "sha256": "4ae8d680cd64a974c99a42033fbe07ad090ac44bff4f4ce7dab0d6055b5a142d"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/packs/software/pack.yaml",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ekk/packs/software/pack.yaml",
-      "original_sha256": "66a394bb2c7b8246c429063e74c65bf19b7bd82b9df10d837fb3ae1e327096d6",
-      "path": "examples/starter/ekk-blueprint/ekk/packs/software/pack.yaml",
-      "sha256": "4ae8d680cd64a974c99a42033fbe07ad090ac44bff4f4ce7dab0d6055b5a142d"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "packs/software/pack.yaml",
-        "tag": "v0.4.0"
-      },
-      "original_path": "packs/software/pack.yaml",
-      "original_sha256": "66a394bb2c7b8246c429063e74c65bf19b7bd82b9df10d837fb3ae1e327096d6",
-      "path": "packs/software/pack.yaml",
-      "sha256": "4ae8d680cd64a974c99a42033fbe07ad090ac44bff4f4ce7dab0d6055b5a142d"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "spec/contract.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "archive/runtime-0.4/spec/contract.md",
       "original_sha256": "58c4dbaf7281a095680eed9794aed1c518265c600dec18fd77edb98c56ecdaa5",
       "path": "archive/runtime-0.4/spec/contract.md",
       "sha256": "2f9595b8bafd98f7dde3ba77f99f4a11f1284468ff537fea3a3f71d27a2f5446"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/spec/contract.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ekk/spec/contract.md",
-      "original_sha256": "58c4dbaf7281a095680eed9794aed1c518265c600dec18fd77edb98c56ecdaa5",
-      "path": "examples/starter/ekk-blueprint/ekk/spec/contract.md",
-      "sha256": "2f9595b8bafd98f7dde3ba77f99f4a11f1284468ff537fea3a3f71d27a2f5446"
+      "method": "reused_verified_english",
+      "original_path": "archive/runtime-0.4/spec/runtime-extensions/README.md",
+      "original_sha256": "61a3cfa37a226eb79a84b1d6c53404ffbfd3b0205739d9f44c1a97e07ceadd4a",
+      "path": "archive/runtime-0.4/spec/runtime-extensions/README.md",
+      "sha256": "eb92c1186c9277620758af4fd1c0af7d06c44e16091c0083d6c89510ab82f616"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "spec/contract.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "spec/contract.md",
-      "original_sha256": "58c4dbaf7281a095680eed9794aed1c518265c600dec18fd77edb98c56ecdaa5",
-      "path": "spec/contract.md",
-      "sha256": "2f9595b8bafd98f7dde3ba77f99f4a11f1284468ff537fea3a3f71d27a2f5446"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "src/ekk/kernel.py",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "archive/runtime-0.4/src/ekk/kernel.py",
       "original_sha256": "7cbf246b02edef5664a0d3eb265f5698742a8228e327ec7469faa0fdb93f921d",
       "path": "archive/runtime-0.4/src/ekk/kernel.py",
       "sha256": "c2b413e863a10d58c4853324254634210b664dcda19b317c90562ccf84a37cea"
     },
     {
-      "origin": {
-        "identity": "sha256:d048e46b1b2f8d0532d2c63d5f0cb25a622dd2648c4d94cddbecd33eed7f70c1",
-        "kind": "owner_preserved_source"
-      },
-      "original_path": "docs/agent-entry.md",
-      "original_sha256": "d048e46b1b2f8d0532d2c63d5f0cb25a622dd2648c4d94cddbecd33eed7f70c1",
-      "path": "docs/agent-entry.md",
-      "sha256": "d4a5349ef56824b6e8f83cc4014bb4e6885805ed2fcb68ae60e331999136ef62"
+      "method": "reused_verified_english",
+      "original_path": "archive/runtime-0.4/src/ekk/reference_export.py",
+      "original_sha256": "0c4fd346aee6fba35ed4e23600871fdc039e82386851b650f9796546282742b9",
+      "path": "archive/runtime-0.4/src/ekk/reference_export.py",
+      "sha256": "e95992270ec989025ed9256c2722ef78c0826ed3e8edcfe9273a7c60ddb888f2"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "docs/architecture.ru.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
+      "original_path": "docs/agent-integration.md",
+      "original_sha256": "78a2adc41f3179b9e1c3eb7d26b92d92572b02bf798e047db2fac7f41108aac1",
+      "path": "docs/agent-integration.md",
+      "sha256": "5504edddf55aeaf8c43c60ea18428a94f16a47edaee081de47b7e92aa420f9e0"
+    },
+    {
+      "method": "reused_verified_english",
       "original_path": "docs/architecture.ru.md",
       "original_sha256": "24c36316bbec06f366c7925523bbf2fd09d7f1dd2a9f5993ae76169839358502",
       "path": "docs/architecture.md",
       "sha256": "fb188b7e3ceeb9f0f1fc38876e876bd431fc248970d4d17c8d46ddc9fa558146"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ARCHITECTURE.ru.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ARCHITECTURE.ru.md",
-      "original_sha256": "24c36316bbec06f366c7925523bbf2fd09d7f1dd2a9f5993ae76169839358502",
-      "path": "examples/starter/ekk-blueprint/ARCHITECTURE.md",
-      "sha256": "fb188b7e3ceeb9f0f1fc38876e876bd431fc248970d4d17c8d46ddc9fa558146"
+      "method": "reused_verified_english",
+      "original_path": "docs/behavior-assurance.md",
+      "original_sha256": "43e048587ce8842c870eca116ea4599f39a64b4be4cbe37a7f19c880f01ac883",
+      "path": "docs/behavior-assurance.md",
+      "sha256": "7a659514ea49bfca781817896b844f87359ff5a14279bc5352c1930e0cec7aab"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/docs/architecture.ru.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ekk/docs/architecture.ru.md",
-      "original_sha256": "24c36316bbec06f366c7925523bbf2fd09d7f1dd2a9f5993ae76169839358502",
-      "path": "examples/starter/ekk-blueprint/ekk/docs/architecture.md",
-      "sha256": "fb188b7e3ceeb9f0f1fc38876e876bd431fc248970d4d17c8d46ddc9fa558146"
+      "method": "reused_verified_english",
+      "original_path": "docs/final-architecture.md",
+      "original_sha256": "04b0178e259dc852310eb7d766e026dbc9b02833cde8a4dc0bf565b736cc6cfa",
+      "path": "docs/final-architecture.md",
+      "sha256": "4258aa3f49a1c36cd71baed38791f201ebdc307b50795cc3f1373b9c0531f283"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "docs/implementation.ru.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "docs/implementation.ru.md",
       "original_sha256": "561bdcdb701b1c534e4d926ac547be42e92de6b8eac33c5908ce74542df3989f",
       "path": "docs/implementation.md",
       "sha256": "3a579a9fe74580881d24632de93911e94e048f6ca5cc809ea70ca6ae40cba717"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/docs/implementation.ru.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ekk/docs/implementation.ru.md",
-      "original_sha256": "561bdcdb701b1c534e4d926ac547be42e92de6b8eac33c5908ce74542df3989f",
-      "path": "examples/starter/ekk-blueprint/ekk/docs/implementation.md",
-      "sha256": "3a579a9fe74580881d24632de93911e94e048f6ca5cc809ea70ca6ae40cba717"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "docs/interfaces.ru.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "docs/interfaces.ru.md",
       "original_sha256": "f9438df2b0ec465994d6c886049afd103984ef21bbba6ae83fb8297f63915956",
       "path": "docs/interfaces.md",
       "sha256": "1d1c7019a03128cade2afc86cb4fe0de327eee908fa675558449b337663b9e8c"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/docs/interfaces.ru.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ekk/docs/interfaces.ru.md",
-      "original_sha256": "f9438df2b0ec465994d6c886049afd103984ef21bbba6ae83fb8297f63915956",
-      "path": "examples/starter/ekk-blueprint/ekk/docs/interfaces.md",
-      "sha256": "1d1c7019a03128cade2afc86cb4fe0de327eee908fa675558449b337663b9e8c"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "docs/migration.ru.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "docs/migration.ru.md",
       "original_sha256": "bebb058825f1b7227326bd462c76ff40fdebedff438de2cb31c180430c7e935e",
       "path": "docs/migration.md",
       "sha256": "aac37792d1611bb29e0036d704b4483b64086b508adf14f205ad0f22dbccf73e"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/docs/migration.ru.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ekk/docs/migration.ru.md",
-      "original_sha256": "bebb058825f1b7227326bd462c76ff40fdebedff438de2cb31c180430c7e935e",
-      "path": "examples/starter/ekk-blueprint/ekk/docs/migration.md",
-      "sha256": "aac37792d1611bb29e0036d704b4483b64086b508adf14f205ad0f22dbccf73e"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "docs/release-evidence.ru.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "docs/release-evidence.ru.md",
       "original_sha256": "484599ab28eab50282a285fdaa4e65a5ebf4f0da8f2af950c6d39dd901a9926c",
       "path": "docs/release-evidence.md",
       "sha256": "5312fa8de1152f830d0a70727466e7ba56617a99e491b0d673319d109588d4de"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/docs/release-evidence.ru.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/ekk/docs/release-evidence.ru.md",
-      "original_sha256": "484599ab28eab50282a285fdaa4e65a5ebf4f0da8f2af950c6d39dd901a9926c",
-      "path": "examples/starter/ekk-blueprint/ekk/docs/release-evidence.md",
-      "sha256": "5312fa8de1152f830d0a70727466e7ba56617a99e491b0d673319d109588d4de"
+      "method": "reused_verified_english",
+      "original_path": "docs/release-notes-0.5.md",
+      "original_sha256": "35a71841a78cf0d01c8c7f406d91fd0f1b2210cb280718959c8a9f1122d60789",
+      "path": "docs/release-notes-0.5.md",
+      "sha256": "6267a215cd3c3179dcfb95f49acd5b70e9730ba4f09b898153ced4765ae51c1d"
     },
     {
-      "origin": {
-        "identity": "sha256:3bc48fc6b0bc47191da9bf5d8eedceaa606a06924b8a582d4b53f962116f8756",
-        "kind": "owner_preserved_source"
-      },
+      "method": "reused_verified_english",
+      "original_path": "docs/runtime-architecture-coverage.md",
+      "original_sha256": "d216bc826615b2245e4433a59893c30db19177239d4d22bc256321de6bbe0a39",
+      "path": "docs/runtime-architecture-coverage.md",
+      "sha256": "e9c0d140ea135f68e154eec33a26f81f8c6af611b1c9b242f2831c9fc4cbdec1"
+    },
+    {
+      "method": "reused_verified_english",
       "original_path": "docs/runtime-client-onboarding.ru.md",
       "original_sha256": "3bc48fc6b0bc47191da9bf5d8eedceaa606a06924b8a582d4b53f962116f8756",
       "path": "docs/runtime-client-onboarding.md",
       "sha256": "ecca1415f3ec2b1f5e0fd8a258d6c9535899f80e208e4cbaf50ea5a97655e6e3"
     },
     {
-      "origin": {
-        "identity": "sha256:207641474c28c02367f006675ed7501e7d15483c6866dea25d7dbc8b1d05d861",
-        "kind": "owner_preserved_source"
-      },
-      "original_path": "docs/using.md",
-      "original_sha256": "207641474c28c02367f006675ed7501e7d15483c6866dea25d7dbc8b1d05d861",
-      "path": "docs/using.md",
-      "sha256": "3c7ed03acdc581279307ea66fcd3959f990f8f70a852ab05b87e37fdda85cbaf"
+      "method": "reused_verified_english",
+      "original_path": "docs/runtime-starter-provenance.md",
+      "original_sha256": "675f3085c30963282c22952d3e7c6bfc1eeb21effe551180fb2cab450e30f9e4",
+      "path": "docs/runtime-starter-provenance.md",
+      "sha256": "88b15102dc875e32de521b5466f45496a542fcaf53ca1244992ee41f3cc97c3f"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/README.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ARCHITECTURE.ru.md",
+      "original_sha256": "24c36316bbec06f366c7925523bbf2fd09d7f1dd2a9f5993ae76169839358502",
+      "path": "examples/starter/ekk-blueprint/ARCHITECTURE.md",
+      "sha256": "fb188b7e3ceeb9f0f1fc38876e876bd431fc248970d4d17c8d46ddc9fa558146"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/MANIFEST.sha256.json",
+      "original_sha256": "65388ce0d228952af3799edb11896ec979bba66931a5541128631542ba8bdcfc",
+      "path": "examples/starter/ekk-blueprint/MANIFEST.sha256.json",
+      "sha256": "3396e87561b5ecb392b0b6aaeb5bb1c8569dd7bd20e013106b0ff54f23eb40aa"
+    },
+    {
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/README.md",
       "original_sha256": "7f160729d2919d85b435d9f05daba6f574cd5a1f5779671b5f422aefb2593f9f",
       "path": "examples/starter/ekk-blueprint/README.md",
       "sha256": "0ac8b3d31bda648b0487b24cd174309162aa8384768270bcce823e13a16d76a0"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/VALIDATION.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/VALIDATION.md",
       "original_sha256": "e1c604c67d0a3bd90e641757fcf6fdabd365336ad4ae4cf628be87da530fc6f9",
       "path": "examples/starter/ekk-blueprint/VALIDATION.md",
       "sha256": "b80920475287a775ce9bf389545a8d7f58281db798d159c8a24cf663d2ce1042"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/AGENTS.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/AGENTS.md",
       "original_sha256": "b09585e65ee4efd62aa8887d7f7001e2af2a6be02c1632e9cde1b79189616e12",
       "path": "examples/starter/ekk-blueprint/ekk/AGENTS.md",
       "sha256": "1311a84752bc7e26c7068d3c87f379562c41dac9c45dd78a0d2f995a761c881a"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/CITATION.cff",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/CITATION.cff",
       "original_sha256": "17e4576abc2975dbcaa76c7bc050560d25e5edfdb77aa91a88faf5b4b2bbcfbf",
       "path": "examples/starter/ekk-blueprint/ekk/CITATION.cff",
       "sha256": "9e221fd997dd919712d16cd1d771fe5b06d3b7767f957e2634e64a6f018652db"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/CONTRIBUTING.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/CONTRIBUTING.md",
       "original_sha256": "a10158e60ce8fbb7a47d74c7ef0dbf665d7f2d28d4b9b68a5468ad726dd1f4d3",
       "path": "examples/starter/ekk-blueprint/ekk/CONTRIBUTING.md",
       "sha256": "deb07f2a5a88c9268f23c29768ff0a71ad6e512849c9e8c409ecd49b76cd4b65"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/GOVERNANCE.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/GOVERNANCE.md",
       "original_sha256": "2ad7bcf401392a8b79c630041314b112b95067b84e52199dca7fdc0fa5f97bad",
       "path": "examples/starter/ekk-blueprint/ekk/GOVERNANCE.md",
       "sha256": "9fc54d42ef9a7cc463ae001c4240e4249db351317bfc38d03ed7b6070e8b6171"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/PUBLICATION.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/PUBLICATION.md",
       "original_sha256": "2fbcc3c091df1ad76dd97989b2e369dd8b79d51ca0229f8491d726bd198e5799",
       "path": "examples/starter/ekk-blueprint/ekk/PUBLICATION.md",
       "sha256": "894fa9253075aadbb4877925d1853bdb7942fd0978ee0abb0bd96fd89ad9a960"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/README.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/README.md",
       "original_sha256": "b844d9c3239dac96b2900a027ec88751a4196f6500d5727dc4ca8548e6aaa97d",
       "path": "examples/starter/ekk-blueprint/ekk/README.md",
       "sha256": "30440bc1e61b34ea87ac1e270767fcdd11435229662d203060f1455d1ac2bdbd"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/SECURITY.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/SECURITY.md",
       "original_sha256": "48810f698ed4f84c393f4957c29f3be3248a3959359b7b6baefe6f6f93cd98c7",
       "path": "examples/starter/ekk-blueprint/ekk/SECURITY.md",
       "sha256": "664e7605ff1bb8b4a72f7d913b53f8058a486a42f9437bd3bdc7272efb9ea226"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/knowledge/.ekk/governance.yaml",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ekk/adapters/README.md",
+      "original_sha256": "765bf412941eca660a742c2dac824f9b964bd53f2df6d6eb8b6e43730e02e7e4",
+      "path": "examples/starter/ekk-blueprint/ekk/adapters/README.md",
+      "sha256": "2358e6a52dbae6b4a59c4cb85a0bad58f4d2a362c1ca80184ff67c8f96e4237e"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ekk/docs/architecture.ru.md",
+      "original_sha256": "24c36316bbec06f366c7925523bbf2fd09d7f1dd2a9f5993ae76169839358502",
+      "path": "examples/starter/ekk-blueprint/ekk/docs/architecture.md",
+      "sha256": "fb188b7e3ceeb9f0f1fc38876e876bd431fc248970d4d17c8d46ddc9fa558146"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ekk/docs/implementation.ru.md",
+      "original_sha256": "561bdcdb701b1c534e4d926ac547be42e92de6b8eac33c5908ce74542df3989f",
+      "path": "examples/starter/ekk-blueprint/ekk/docs/implementation.md",
+      "sha256": "3a579a9fe74580881d24632de93911e94e048f6ca5cc809ea70ca6ae40cba717"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ekk/docs/interfaces.ru.md",
+      "original_sha256": "f9438df2b0ec465994d6c886049afd103984ef21bbba6ae83fb8297f63915956",
+      "path": "examples/starter/ekk-blueprint/ekk/docs/interfaces.md",
+      "sha256": "1d1c7019a03128cade2afc86cb4fe0de327eee908fa675558449b337663b9e8c"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ekk/docs/migration.ru.md",
+      "original_sha256": "bebb058825f1b7227326bd462c76ff40fdebedff438de2cb31c180430c7e935e",
+      "path": "examples/starter/ekk-blueprint/ekk/docs/migration.md",
+      "sha256": "aac37792d1611bb29e0036d704b4483b64086b508adf14f205ad0f22dbccf73e"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ekk/docs/release-evidence.ru.md",
+      "original_sha256": "484599ab28eab50282a285fdaa4e65a5ebf4f0da8f2af950c6d39dd901a9926c",
+      "path": "examples/starter/ekk-blueprint/ekk/docs/release-evidence.md",
+      "sha256": "5312fa8de1152f830d0a70727466e7ba56617a99e491b0d673319d109588d4de"
+    },
+    {
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/knowledge/.ekk/governance.yaml",
       "original_sha256": "8a357b9bce97e7daf6fe1182002f9f457a3471595a730fca4c511a94b78d3e0f",
       "path": "examples/starter/ekk-blueprint/ekk/knowledge/.ekk/governance.yaml",
       "sha256": "17e53c6f705d4343dc6cd380cb991b8db63c0125b4166cb961ac00d42237b9b9"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/personal/.ekk/governance.yaml",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/realm-templates/personal/.ekk/governance.yaml",
-      "original_sha256": "8a357b9bce97e7daf6fe1182002f9f457a3471595a730fca4c511a94b78d3e0f",
-      "path": "examples/starter/ekk-blueprint/realm-templates/personal/.ekk/governance.yaml",
-      "sha256": "17e53c6f705d4343dc6cd380cb991b8db63c0125b4166cb961ac00d42237b9b9"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/knowledge/.ekk/packs.lock.yaml",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/knowledge/.ekk/packs.lock.yaml",
       "original_sha256": "d5e9715b0573d3d5d90bde555b91563a36ad850a940bd61d9b076dee030f57a5",
       "path": "examples/starter/ekk-blueprint/ekk/knowledge/.ekk/packs.lock.yaml",
       "sha256": "52b5de0531d1063f8994e509f69a050e46d52ee6d6be218410dc1cc3003004d1"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/organization/.ekk/packs.lock.yaml",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/realm-templates/organization/.ekk/packs.lock.yaml",
-      "original_sha256": "d5e9715b0573d3d5d90bde555b91563a36ad850a940bd61d9b076dee030f57a5",
-      "path": "examples/starter/ekk-blueprint/realm-templates/organization/.ekk/packs.lock.yaml",
-      "sha256": "52b5de0531d1063f8994e509f69a050e46d52ee6d6be218410dc1cc3003004d1"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/personal/.ekk/packs.lock.yaml",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/realm-templates/personal/.ekk/packs.lock.yaml",
-      "original_sha256": "d5e9715b0573d3d5d90bde555b91563a36ad850a940bd61d9b076dee030f57a5",
-      "path": "examples/starter/ekk-blueprint/realm-templates/personal/.ekk/packs.lock.yaml",
-      "sha256": "52b5de0531d1063f8994e509f69a050e46d52ee6d6be218410dc1cc3003004d1"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/knowledge/AGENTS.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/knowledge/AGENTS.md",
       "original_sha256": "9cae53f22b150c406032485393391b7f67a840c8fb8bb6cd49621382c0268349",
       "path": "examples/starter/ekk-blueprint/ekk/knowledge/AGENTS.md",
       "sha256": "7b14b504a448352ba2f114450a2783b9349e2b4d2c9591cea75bad97c4bd403a"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/organization/AGENTS.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/realm-templates/organization/AGENTS.md",
-      "original_sha256": "9cae53f22b150c406032485393391b7f67a840c8fb8bb6cd49621382c0268349",
-      "path": "examples/starter/ekk-blueprint/realm-templates/organization/AGENTS.md",
-      "sha256": "7b14b504a448352ba2f114450a2783b9349e2b4d2c9591cea75bad97c4bd403a"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/personal/AGENTS.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/realm-templates/personal/AGENTS.md",
-      "original_sha256": "9cae53f22b150c406032485393391b7f67a840c8fb8bb6cd49621382c0268349",
-      "path": "examples/starter/ekk-blueprint/realm-templates/personal/AGENTS.md",
-      "sha256": "7b14b504a448352ba2f114450a2783b9349e2b4d2c9591cea75bad97c4bd403a"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/knowledge/README.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/knowledge/README.md",
       "original_sha256": "cc02fb1fb0b134125c656f80d277d477bd2eec3b7c9617241b00589b62e86fb2",
       "path": "examples/starter/ekk-blueprint/ekk/knowledge/README.md",
       "sha256": "3b3cb264938d28df5f528b463c2dc38718a5292d10da3cb39d52df68002edb08"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/knowledge/contexts/root.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/knowledge/contexts/root.md",
       "original_sha256": "c532efeff2d95e742afb5dc09229e8c530067edc5d48813feb094598dc8d0c24",
       "path": "examples/starter/ekk-blueprint/ekk/knowledge/contexts/root.md",
       "sha256": "9779fdc0bdf12e459d47061ebce43b940954642601b7fa64049f0564e8531a43"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/knowledge/records/decision-example.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/knowledge/records/decision-example.md",
       "original_sha256": "20c8d62ffa1ca19e9781905dddb6da76e834a1517d3d71358bc8f5bb34627a52",
       "path": "examples/starter/ekk-blueprint/ekk/knowledge/records/decision-example.md",
       "sha256": "38c693b91c8e7d8644d114abdb3a5c279da9a34024f605c67951204b480f81d1"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/knowledge/records/observation-example.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/knowledge/records/observation-example.md",
       "original_sha256": "110ee9e4d39dd6b484651fe8d113f961aeeaf539d754be05c661852254b735f9",
       "path": "examples/starter/ekk-blueprint/ekk/knowledge/records/observation-example.md",
       "sha256": "bf16a4c4da0bb620aac95f8ef514d2fcddec8f9477923748c46a46d2bdb396a8"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/knowledge/records/source-example.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/knowledge/records/source-example.md",
       "original_sha256": "edbfacf55c01e63b0991e3ab0c3da7601cb4b7b9d368739d5bf2e693b82b064b",
       "path": "examples/starter/ekk-blueprint/ekk/knowledge/records/source-example.md",
       "sha256": "05a5ea12ae69dfa8ad775c52c1ecb5c40d31132bf7e94db23eeba272a589cd25"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/knowledge/sources/d892a16d-806a-5202-83d6-da07e0d576cb/original.txt",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/knowledge/sources/d892a16d-806a-5202-83d6-da07e0d576cb/original.txt",
       "original_sha256": "2288aacc319173cbcde7c4242c67b479cda3721b2ae1126fe4000f55582ad757",
       "path": "examples/starter/ekk-blueprint/ekk/knowledge/sources/d892a16d-806a-5202-83d6-da07e0d576cb/original.txt",
       "sha256": "c4723172fd3ea3937d80818a40a028a94b8d9fef4b4e89dde316efb9f6ba519f"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/organization/sources/744ab1f0-8fb5-5ce7-a70a-5f0939ec570e/original.txt",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/realm-templates/organization/sources/744ab1f0-8fb5-5ce7-a70a-5f0939ec570e/original.txt",
-      "original_sha256": "2288aacc319173cbcde7c4242c67b479cda3721b2ae1126fe4000f55582ad757",
-      "path": "examples/starter/ekk-blueprint/realm-templates/organization/sources/744ab1f0-8fb5-5ce7-a70a-5f0939ec570e/original.txt",
-      "sha256": "c4723172fd3ea3937d80818a40a028a94b8d9fef4b4e89dde316efb9f6ba519f"
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ekk/packs/base/METHOD.md",
+      "original_sha256": "346ab25c26cf4253482aff6bcf08eae18e25cca54504ce8a27825f57b7307cbc",
+      "path": "examples/starter/ekk-blueprint/ekk/packs/base/METHOD.md",
+      "sha256": "12c4649728b857c33b2f7ef42aa0a6b96d8d61aebaa020c586d723c2ea2d85fc"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/personal/sources/d9dda74d-4363-5760-a137-2b5506e94d9c/original.txt",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/realm-templates/personal/sources/d9dda74d-4363-5760-a137-2b5506e94d9c/original.txt",
-      "original_sha256": "2288aacc319173cbcde7c4242c67b479cda3721b2ae1126fe4000f55582ad757",
-      "path": "examples/starter/ekk-blueprint/realm-templates/personal/sources/d9dda74d-4363-5760-a137-2b5506e94d9c/original.txt",
-      "sha256": "c4723172fd3ea3937d80818a40a028a94b8d9fef4b4e89dde316efb9f6ba519f"
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ekk/packs/base/pack.yaml",
+      "original_sha256": "ed71114feb573dfb080d986e2549f70cd11a5d45bd6166135f62cc0dfd4e9944",
+      "path": "examples/starter/ekk-blueprint/ekk/packs/base/pack.yaml",
+      "sha256": "62e1e9ae8bc217d13a13371fe7839bfeb4b4680170b17792a58a7ea85a86d666"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/research/README.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ekk/packs/research/METHOD.md",
+      "original_sha256": "9d03d6f20a7c525db3aab8a0218e2c21831209bc9360a40cbfc23148c3614c99",
+      "path": "examples/starter/ekk-blueprint/ekk/packs/research/METHOD.md",
+      "sha256": "219aea334540785cd6d57299158da8724743ea308ae8aee63e848e61f39bc499"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ekk/packs/research/pack.yaml",
+      "original_sha256": "bbac0c73f0c3ebe7f3eeee541341c753dcecaeae38375294f793823dfa85a70e",
+      "path": "examples/starter/ekk-blueprint/ekk/packs/research/pack.yaml",
+      "sha256": "058b54a2688007659eff06a82d718dc61e84a753adbe85b63b331be69d60ae43"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ekk/packs/software/METHOD.md",
+      "original_sha256": "7de7522e743487df6897ee475de4b07574c3d42a79c7f0fb27d439a7da309dc0",
+      "path": "examples/starter/ekk-blueprint/ekk/packs/software/METHOD.md",
+      "sha256": "ed111e5426faf8c37bd65a62a735796c24a8871ab6ff52f6f62439275d66662e"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ekk/packs/software/pack.yaml",
+      "original_sha256": "66a394bb2c7b8246c429063e74c65bf19b7bd82b9df10d837fb3ae1e327096d6",
+      "path": "examples/starter/ekk-blueprint/ekk/packs/software/pack.yaml",
+      "sha256": "4ae8d680cd64a974c99a42033fbe07ad090ac44bff4f4ce7dab0d6055b5a142d"
+    },
+    {
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/research/README.md",
       "original_sha256": "6afcdedd86d35426188c327a6ae4a771a0d3c9909514e81f64f4d177fc892465",
       "path": "examples/starter/ekk-blueprint/ekk/research/README.md",
       "sha256": "89e5c47f4458aef5aebc2c4b9f60e1f3f3a6468638407d0798edde825a07529a"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/research/sources.yaml",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/research/sources.yaml",
       "original_sha256": "263f22a64b3d0c17c51e957a6e89f780155b6e1814a152b8a34a7817d83dc90a",
       "path": "examples/starter/ekk-blueprint/ekk/research/sources.yaml",
       "sha256": "394f4fb12e4e652a369651b07dd41a386c79f2e5a36d10bf94568151997fad93"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/research/studies/001-environment-learning/protocol.yaml",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/research/studies/001-environment-learning/protocol.yaml",
       "original_sha256": "69cb0cf7d7257d917f9f7ae8d6c50098b75c65b5e5d2538a3f7efb9ce5c693d2",
       "path": "examples/starter/ekk-blueprint/ekk/research/studies/001-environment-learning/protocol.yaml",
       "sha256": "c0617523ab4a4430f30c295ad1aa4df110e75bb4dae2623fc1a1a31ab2e2831d"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "research/studies/001-environment-learning/protocol.yaml",
-        "tag": "v0.4.0"
-      },
-      "original_path": "research/studies/001-environment-learning/protocol.yaml",
-      "original_sha256": "69cb0cf7d7257d917f9f7ae8d6c50098b75c65b5e5d2538a3f7efb9ce5c693d2",
-      "path": "research/studies/001-environment-learning/protocol.yaml",
-      "sha256": "c0617523ab4a4430f30c295ad1aa4df110e75bb4dae2623fc1a1a31ab2e2831d"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/research/studies/001-environment-learning/report.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/research/studies/001-environment-learning/report.md",
       "original_sha256": "a5e17645942b663d0fa3f27370570ca7964e4a33fc681e4ebf5a066aaaa6d8e0",
       "path": "examples/starter/ekk-blueprint/ekk/research/studies/001-environment-learning/report.md",
       "sha256": "177a985bd0d95706d790536c9e07bc419434ee8e5df32be1bb1e7632faf5f61d"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "research/studies/001-environment-learning/report.md",
-        "tag": "v0.4.0"
-      },
-      "original_path": "research/studies/001-environment-learning/report.md",
-      "original_sha256": "a5e17645942b663d0fa3f27370570ca7964e4a33fc681e4ebf5a066aaaa6d8e0",
-      "path": "research/studies/001-environment-learning/report.md",
-      "sha256": "177a985bd0d95706d790536c9e07bc419434ee8e5df32be1bb1e7632faf5f61d"
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/ekk/spec/contract.md",
+      "original_sha256": "58c4dbaf7281a095680eed9794aed1c518265c600dec18fd77edb98c56ecdaa5",
+      "path": "examples/starter/ekk-blueprint/ekk/spec/contract.md",
+      "sha256": "2f9595b8bafd98f7dde3ba77f99f4a11f1284468ff537fea3a3f71d27a2f5446"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/src/ekk/README.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/src/ekk/README.md",
       "original_sha256": "24a5b8f0d2b84c04432b47736c75b9517ba1f5d75b34d761b5551077a4fb0323",
       "path": "examples/starter/ekk-blueprint/ekk/src/ekk/README.md",
       "sha256": "eca693665ec21ffcf9312bd0bbe46dfe2617c72d4b40ccd10b162f5f130fb3ac"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/tests/fixtures/workspace.yaml",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/tests/fixtures/workspace.yaml",
       "original_sha256": "61696e74535b94acad85874c44995dcd78b9c7a73f43fc644d4db40c7ded7958",
       "path": "examples/starter/ekk-blueprint/ekk/tests/fixtures/workspace.yaml",
       "sha256": "091583d108eff8d8bc44a0a70f2a81b93278f382a289f0fa4f8e5d87acb2bb19"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/project-binding/.ekk/workspace.yaml",
-        "tag": "v0.4.0"
-      },
-      "original_path": "examples/starter/ekk-blueprint/project-binding/.ekk/workspace.yaml",
-      "original_sha256": "61696e74535b94acad85874c44995dcd78b9c7a73f43fc644d4db40c7ded7958",
-      "path": "examples/starter/ekk-blueprint/project-binding/.ekk/workspace.yaml",
-      "sha256": "091583d108eff8d8bc44a0a70f2a81b93278f382a289f0fa4f8e5d87acb2bb19"
-    },
-    {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/tests/test_files.py",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/tests/test_files.py",
       "original_sha256": "ee7b9351a37d6801c5f9568d563e2b8b979fb24af4047f2e21a6860698f135ab",
       "path": "examples/starter/ekk-blueprint/ekk/tests/test_files.py",
       "sha256": "78c02700752ad9d098cf7dac543153fd70e3df57b3933c73673949f98656e284"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/ekk/tools/validate.py",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/ekk/tools/validate.py",
       "original_sha256": "497c0b7737ff20305e5bbbf188d17a47e5f191493fe53b4f09ca3564afa884d3",
       "path": "examples/starter/ekk-blueprint/ekk/tools/validate.py",
       "sha256": "6a402d3a35fa64e44b3625e3cf0671da8f2a111c354d49aac1770d7f7fc455ef"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/project-binding/AGENTS.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/project-binding/.ekk/workspace.yaml",
+      "original_sha256": "61696e74535b94acad85874c44995dcd78b9c7a73f43fc644d4db40c7ded7958",
+      "path": "examples/starter/ekk-blueprint/project-binding/.ekk/workspace.yaml",
+      "sha256": "091583d108eff8d8bc44a0a70f2a81b93278f382a289f0fa4f8e5d87acb2bb19"
+    },
+    {
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/project-binding/AGENTS.md",
       "original_sha256": "ad23761f607af9458eecb5f0652785af4edcf4f6ee36687ca65a782f4e8e3bb2",
       "path": "examples/starter/ekk-blueprint/project-binding/AGENTS.md",
       "sha256": "df714667310b64cc99f62a963f10841e2e6c87dec62a179a5cb14e4763dc7022"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/project-binding/README.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/project-binding/README.md",
       "original_sha256": "019476c47e292d5bc97e577f98bd09cccb61b6f783045d6c9045fef502b67abd",
       "path": "examples/starter/ekk-blueprint/project-binding/README.md",
       "sha256": "46d67e3d8bc3b643780f1a91874372f9af55db90bdedf05e675b2b7c188dfc90"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/organization/.ekk/governance.yaml",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/realm-templates/organization/.ekk/governance.yaml",
       "original_sha256": "3a5947c761907b9159a3f7686d88cbb700e20b4516ad864833cf0b3d418c166a",
       "path": "examples/starter/ekk-blueprint/realm-templates/organization/.ekk/governance.yaml",
       "sha256": "7e7a1e129fca0b3268772f742a0c7f14efe1fa57cb429ca97de062d935469e03"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/organization/README.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/realm-templates/organization/.ekk/packs.lock.yaml",
+      "original_sha256": "d5e9715b0573d3d5d90bde555b91563a36ad850a940bd61d9b076dee030f57a5",
+      "path": "examples/starter/ekk-blueprint/realm-templates/organization/.ekk/packs.lock.yaml",
+      "sha256": "52b5de0531d1063f8994e509f69a050e46d52ee6d6be218410dc1cc3003004d1"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/realm-templates/organization/AGENTS.md",
+      "original_sha256": "9cae53f22b150c406032485393391b7f67a840c8fb8bb6cd49621382c0268349",
+      "path": "examples/starter/ekk-blueprint/realm-templates/organization/AGENTS.md",
+      "sha256": "7b14b504a448352ba2f114450a2783b9349e2b4d2c9591cea75bad97c4bd403a"
+    },
+    {
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/realm-templates/organization/README.md",
       "original_sha256": "542615f9d0b2a549d226b21af573964c91262186b9bfcd826e0d557d4829472d",
       "path": "examples/starter/ekk-blueprint/realm-templates/organization/README.md",
       "sha256": "b5ff21975635049a41a0e913ff5a371030367aafed248eb33cf12b185303acb9"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/organization/contexts/root.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/realm-templates/organization/contexts/root.md",
       "original_sha256": "f5623d8db7ca6f196bced0deb6b6bb7df07cd28855d27950d7fb3c9003a5129d",
       "path": "examples/starter/ekk-blueprint/realm-templates/organization/contexts/root.md",
       "sha256": "56a3572f982045ecf71fbaf4ba41d955693e73e34da07f9855cbf845cb423e0b"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/organization/records/decision-example.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/realm-templates/organization/records/decision-example.md",
       "original_sha256": "6982280b1414532de8d51e0c7e57b88bee52331b08727e390bb6c5a0038c6a26",
       "path": "examples/starter/ekk-blueprint/realm-templates/organization/records/decision-example.md",
       "sha256": "0b43dbb7e379690648948c86c913ae466064263c2c6872623d82265502a20117"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/organization/records/observation-example.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/realm-templates/organization/records/observation-example.md",
       "original_sha256": "aaa6efec92cbb302fd8db4afdab6652425c61e2a7812b4bbfb0fef8852285b16",
       "path": "examples/starter/ekk-blueprint/realm-templates/organization/records/observation-example.md",
       "sha256": "211b199ba55ce8d889fdeeeb37cd928069d10f81fb14b4a7b60c3bb267801634"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/organization/records/source-example.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/realm-templates/organization/records/source-example.md",
       "original_sha256": "3ffdf83a8337833d8894391361a213f0347cfc9a80c918fb74b7437308dccf3a",
       "path": "examples/starter/ekk-blueprint/realm-templates/organization/records/source-example.md",
       "sha256": "d8a51dff0500bffbbb48f66793a2efea190a986125fe7f8d4766c911e2b37877"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/personal/README.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/realm-templates/organization/sources/744ab1f0-8fb5-5ce7-a70a-5f0939ec570e/original.txt",
+      "original_sha256": "2288aacc319173cbcde7c4242c67b479cda3721b2ae1126fe4000f55582ad757",
+      "path": "examples/starter/ekk-blueprint/realm-templates/organization/sources/744ab1f0-8fb5-5ce7-a70a-5f0939ec570e/original.txt",
+      "sha256": "c4723172fd3ea3937d80818a40a028a94b8d9fef4b4e89dde316efb9f6ba519f"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/realm-templates/personal/.ekk/governance.yaml",
+      "original_sha256": "8a357b9bce97e7daf6fe1182002f9f457a3471595a730fca4c511a94b78d3e0f",
+      "path": "examples/starter/ekk-blueprint/realm-templates/personal/.ekk/governance.yaml",
+      "sha256": "17e53c6f705d4343dc6cd380cb991b8db63c0125b4166cb961ac00d42237b9b9"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/realm-templates/personal/.ekk/packs.lock.yaml",
+      "original_sha256": "d5e9715b0573d3d5d90bde555b91563a36ad850a940bd61d9b076dee030f57a5",
+      "path": "examples/starter/ekk-blueprint/realm-templates/personal/.ekk/packs.lock.yaml",
+      "sha256": "52b5de0531d1063f8994e509f69a050e46d52ee6d6be218410dc1cc3003004d1"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/realm-templates/personal/AGENTS.md",
+      "original_sha256": "9cae53f22b150c406032485393391b7f67a840c8fb8bb6cd49621382c0268349",
+      "path": "examples/starter/ekk-blueprint/realm-templates/personal/AGENTS.md",
+      "sha256": "7b14b504a448352ba2f114450a2783b9349e2b4d2c9591cea75bad97c4bd403a"
+    },
+    {
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/realm-templates/personal/README.md",
       "original_sha256": "b1283c3a7709ac4e42ea0a81950bf5d76195c3ffe6853dc8b2076dc6453e6b7f",
       "path": "examples/starter/ekk-blueprint/realm-templates/personal/README.md",
       "sha256": "ae728f599a6280ee5294836894447adb537ba53d397c998b41b2ec86c48470a4"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/personal/contexts/root.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/realm-templates/personal/contexts/root.md",
       "original_sha256": "f2deefb38df460141587ea5d6b48064b6d30553430314120a979078c80ab9406",
       "path": "examples/starter/ekk-blueprint/realm-templates/personal/contexts/root.md",
       "sha256": "964e565fb3a004a32b889e345b586e313a1bff74be6ea7c3cc0300df236c808d"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/personal/records/decision-example.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/realm-templates/personal/records/decision-example.md",
       "original_sha256": "aa3f5d06938d40ae2187174b3614faef33e4352edf22def7e5fb2ac4158509b1",
       "path": "examples/starter/ekk-blueprint/realm-templates/personal/records/decision-example.md",
       "sha256": "dbd5f63652c346d41f64eee5a3459ed5f4d2b4ef5443535c7746710150cb233a"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/personal/records/observation-example.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/realm-templates/personal/records/observation-example.md",
       "original_sha256": "6c1fc55449a78ad27905637c7be42c7c70a219caacff657eef7963ee11b55de6",
       "path": "examples/starter/ekk-blueprint/realm-templates/personal/records/observation-example.md",
       "sha256": "a2f01270aa9ac280575645f7ceed49f02d7c1784eac04d90a9e775ab277be8b9"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "examples/starter/ekk-blueprint/realm-templates/personal/records/source-example.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "examples/starter/ekk-blueprint/realm-templates/personal/records/source-example.md",
       "original_sha256": "3f10731ce33783db5fb4e8014e49e0d4d8b1f2b0cb8f129ef78280d1ce3d3a9b",
       "path": "examples/starter/ekk-blueprint/realm-templates/personal/records/source-example.md",
       "sha256": "567093e99244f673c26a179289f0a15c1391be10a295ecf871e82984b74c296e"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "research/metrics-v0.3.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
+      "original_path": "examples/starter/ekk-blueprint/realm-templates/personal/sources/d9dda74d-4363-5760-a137-2b5506e94d9c/original.txt",
+      "original_sha256": "2288aacc319173cbcde7c4242c67b479cda3721b2ae1126fe4000f55582ad757",
+      "path": "examples/starter/ekk-blueprint/realm-templates/personal/sources/d9dda74d-4363-5760-a137-2b5506e94d9c/original.txt",
+      "sha256": "c4723172fd3ea3937d80818a40a028a94b8d9fef4b4e89dde316efb9f6ba519f"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "packs/README.md",
+      "original_sha256": "968008bf4caa4d4a4235cd1792fc224f1aaed3ae1d98a124db8bc5651fede04e",
+      "path": "packs/README.md",
+      "sha256": "deaa7a01626cae782de6de73b81326c35840426941b248e7e90ee50c852037ad"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "packs/base/METHOD.md",
+      "original_sha256": "346ab25c26cf4253482aff6bcf08eae18e25cca54504ce8a27825f57b7307cbc",
+      "path": "packs/base/METHOD.md",
+      "sha256": "12c4649728b857c33b2f7ef42aa0a6b96d8d61aebaa020c586d723c2ea2d85fc"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "packs/base/pack.yaml",
+      "original_sha256": "ed71114feb573dfb080d986e2549f70cd11a5d45bd6166135f62cc0dfd4e9944",
+      "path": "packs/base/pack.yaml",
+      "sha256": "62e1e9ae8bc217d13a13371fe7839bfeb4b4680170b17792a58a7ea85a86d666"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "packs/research/METHOD.md",
+      "original_sha256": "9d03d6f20a7c525db3aab8a0218e2c21831209bc9360a40cbfc23148c3614c99",
+      "path": "packs/research/METHOD.md",
+      "sha256": "219aea334540785cd6d57299158da8724743ea308ae8aee63e848e61f39bc499"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "packs/research/pack.yaml",
+      "original_sha256": "bbac0c73f0c3ebe7f3eeee541341c753dcecaeae38375294f793823dfa85a70e",
+      "path": "packs/research/pack.yaml",
+      "sha256": "058b54a2688007659eff06a82d718dc61e84a753adbe85b63b331be69d60ae43"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "packs/software/METHOD.md",
+      "original_sha256": "7de7522e743487df6897ee475de4b07574c3d42a79c7f0fb27d439a7da309dc0",
+      "path": "packs/software/METHOD.md",
+      "sha256": "ed111e5426faf8c37bd65a62a735796c24a8871ab6ff52f6f62439275d66662e"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "packs/software/pack.yaml",
+      "original_sha256": "66a394bb2c7b8246c429063e74c65bf19b7bd82b9df10d837fb3ae1e327096d6",
+      "path": "packs/software/pack.yaml",
+      "sha256": "4ae8d680cd64a974c99a42033fbe07ad090ac44bff4f4ce7dab0d6055b5a142d"
+    },
+    {
+      "method": "reused_verified_english",
       "original_path": "research/metrics-v0.3.md",
       "original_sha256": "2d8c1aef78e39f7ba5619a38c6612e81df8d5c431ea83944721d312ab7026d09",
       "path": "research/metrics-v0.3.md",
       "sha256": "f365363efdd911765e6da7b50e191b630f9a52d6d4ddd04ad4e8dfefdfb36e74"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "research/protocol-v0.1.md",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
       "original_path": "research/protocol-v0.1.md",
       "original_sha256": "75ca0f82c98be0229671cb3c5e7644b0236ee1561583308528571353d325c1f5",
       "path": "research/protocol-v0.1.md",
       "sha256": "1f889b3e44afd6001c6541de577d8fd557f4031c4b5c79e2afaae992c3557874"
     },
     {
-      "origin": {
-        "kind": "public_git",
-        "path": "tests/test_architecture_store.py",
-        "tag": "v0.4.0"
-      },
+      "method": "reused_verified_english",
+      "original_path": "research/studies/001-environment-learning/protocol.yaml",
+      "original_sha256": "69cb0cf7d7257d917f9f7ae8d6c50098b75c65b5e5d2538a3f7efb9ce5c693d2",
+      "path": "research/studies/001-environment-learning/protocol.yaml",
+      "sha256": "c0617523ab4a4430f30c295ad1aa4df110e75bb4dae2623fc1a1a31ab2e2831d"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "research/studies/001-environment-learning/report.md",
+      "original_sha256": "a5e17645942b663d0fa3f27370570ca7964e4a33fc681e4ebf5a066aaaa6d8e0",
+      "path": "research/studies/001-environment-learning/report.md",
+      "sha256": "177a985bd0d95706d790536c9e07bc419434ee8e5df32be1bb1e7632faf5f61d"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "spec/contract.md",
+      "original_sha256": "58c4dbaf7281a095680eed9794aed1c518265c600dec18fd77edb98c56ecdaa5",
+      "path": "spec/contract.md",
+      "sha256": "2f9595b8bafd98f7dde3ba77f99f4a11f1284468ff537fea3a3f71d27a2f5446"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "src/ekk/adapters/packs.py",
+      "original_sha256": "45c458c65e0b7cd04b6593d00b34a1b922dd0e22a7ed623b48874d879994cda9",
+      "path": "src/ekk/adapters/packs.py",
+      "sha256": "71bb2e9c6cb42f83a3cd76fe1c93f7082df9af2c64180598fa64655ea2e20257"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "tests/test_architecture_application.py",
+      "original_sha256": "99c1dc73444f4bd3311d6d95dac9634dbeaba99e440cf0b361139f950e4c0b0c",
+      "path": "tests/test_architecture_application.py",
+      "sha256": "661cfcd63a74d8c44038382655bfcf02e9634081878ffb249bcb07c80430a366"
+    },
+    {
+      "method": "reused_verified_english",
       "original_path": "tests/test_architecture_store.py",
-      "original_sha256": "93d9c97445ba89e66b729319f33ae0928d28fbdf99129362e3ccac925ddb2f10",
+      "original_sha256": "aeb6b8807ab0f7c25b3114db630178b58e2c8487f10bff8ca52b78d0fe8c5eb6",
       "path": "tests/test_architecture_store.py",
-      "sha256": "9e065913bf7b13576e2be5c1c7aac4bc090b36d90900c5d79aaa10345bd9d9e2"
+      "sha256": "568545a022a6a6bc85430aa4ef1fbab45525bed89b337a647cf5b3f3cde524ac"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "tests/test_context_continuity.py",
+      "original_sha256": "ce61b0babc25692bcd561657d4201325cea13b15eeb6150e101cb2d102fc699d",
+      "path": "tests/test_context_continuity.py",
+      "sha256": "44690666481a227782882098adbe3c8299d32f73f78b1aa32c44946d7b1fdf74"
+    },
+    {
+      "method": "reused_verified_english",
+      "original_path": "tests/test_record_queries.py",
+      "original_sha256": "65f230924b3dd8e71799a08137cbea3f2decc0469d24f7869a5e33b5cbe8c452",
+      "path": "tests/test_record_queries.py",
+      "sha256": "6bd39d1be44d953a95430f5f2521d67d68369759d4d92ff2faa62875e1944135"
     }
   ],
   "language": "en",
-  "note": "Each original hash identifies exact pre-translation bytes. Public Git origins are verified against v0.4.0; newer development and replay sources retain owner-preserved hash identities. Translation changes no execution authority.",
+  "note": "Exact original bytes accompany the private preparation receipt. Only reviewed synthetic fixtures are re-pinned; no active realm is rewritten.",
+  "original_release": "preserved_originals",
   "schema": "ekk.translation-provenance/0.1"
 }

@@ -1,6 +1,8 @@
 # Start from a useful task
 
-Runtime 0.5 is the current checkout. Python 3.11+ and Git are required. Install
+For result retention, explicit challenges, current file evidence and owner recovery, see [daily reliability](daily-reliability.md).
+
+Runtime 0.7 is the current checkout. Python 3.11+ and Git are required. Install
 locally and run the complete disposable method example:
 
 ```sh
@@ -21,6 +23,16 @@ The lower-level source/capture/propose/apply example also remains runnable:
 ```sh
 .venv/bin/python examples/quickstart.py --ekk .venv/bin/ekk
 ```
+
+Run the new report-refresh and commit-change workflow through the installed CLI:
+
+```sh
+.venv/bin/python examples/coding_readiness.py --ekk .venv/bin/ekk
+```
+
+It reports nine disposable cases, including a real fixture-test failure and
+repair. The [coding readiness guide](coding-readiness.md) explains the request,
+configured reports, exit codes and the committed-object-only scope.
 
 ## Enter existing work
 

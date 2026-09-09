@@ -81,5 +81,18 @@ class MarkdownCacheTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'record schema'):
                 codec.validate_schema('record',codec.load_yaml(raw))
 
+    def test_migrated_working_set_stays_warm_across_current_and_historical_scans(self):
+        codec=MarkdownCodec()
+        documents=[f'id: record-{n}\nrevision: 1\n'.encode() for n in range(2301)]
+        for historical in (False,True):
+            for raw in documents:codec.load_yaml(raw,allow_aliases=historical)
+        with patch.object(codec,'_parse_yaml',wraps=codec._parse_yaml) as parse:
+            for historical in (False,True):
+                for n,raw in enumerate(documents):
+                    self.assertEqual(f'record-{n}',codec.load_yaml(raw,allow_aliases=historical)['id'])
+            self.assertEqual(0,parse.call_count)
+        self.assertLessEqual(codec._parse_cache_bytes,markdown.MAX_PARSE_CACHE_BYTES)
+        self.assertLessEqual(len(codec._parse_cache),markdown.MAX_PARSE_CACHE_ENTRIES)
+
 
 if __name__=='__main__':unittest.main()

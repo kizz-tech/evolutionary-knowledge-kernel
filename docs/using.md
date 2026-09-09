@@ -1,5 +1,7 @@
 # Working through the personal environment
 
+For result retention, explicit challenges, current file evidence and owner recovery, see [daily reliability](daily-reliability.md).
+
 Start with `ekk enter --cwd <project> --task <intent> --compact`.
 [Quick entry](quickstart.md) describes the personal home, separate projection, and
 exact continuation. [Methods](methods.md) describes verification, application,
@@ -8,7 +10,29 @@ a new commitment.
 
 The current low-level workflow for sources and records is preserved below.
 
-# Everyday work with EKK 0.5
+## Exact follow-up reads
+
+Keep the successful project route when following a reference:
+
+```sh
+ekk fetch --cwd /path/to/project --json /path/to/reference-request.json
+ekk read-source --cwd /path/to/project --json /path/to/source-request.json
+```
+
+`reference-request.json` contains `{"reference": {"realm": "REALM_ID", "id":
+"RECORD_ID", "revision": 1, "digest": "sha256:EXACT_DIGEST"}}`, using the exact
+returned values. `source-request.json` adds `"asset_index": 0` for the selected
+source asset; subsequent chunks add the returned `next_offset` as `"offset"`.
+Assemble the original bytes until `next_offset` is null and check the asset hash.
+An optional selector is a separate request field, not part of record identity.
+
+For an explicitly selected owner, use `--profile PROFILE --realm ALIAS --scope
+CONTEXT_ID`; repeat `--scope` for each applicable allowed context. Explicit realm
+selection does not reuse the workspace's contexts, and context fields inside a
+JSON request do not replace those routing flags. Reuse the successful bound
+`--cwd` where possible. These commands do not expand permissions.
+
+# Everyday work with EKK 0.7
 
 Describe the task to the agent: "check the grounds for this decision," "retain a
 significant result," or "help change the product in light of accepted constraints."
@@ -107,3 +131,12 @@ Deployment, publication, and execution in external systems use those systems'
 standard tools within their own authorization. Local verification does not prove
 a production effect. Research protocols remain `not_run`; everyday use does not
 replace controlled comparison and complete cost accounting.
+
+## Assess current coding evidence
+
+Use `ekk assess --cwd PROJECT --json REQUEST` for a declared set of configured
+check reports tied to an exact Git commit. The command obtains current bound
+context and report bytes itself; it does not run checks or grant permission.
+Exit 0 means only that the declared report prerequisites are met; exit 1 preserves
+failed, missing or indeterminate evidence. See [coding readiness](coding-readiness.md)
+for the report contract, safe follow-up and complete disposable example.

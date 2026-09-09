@@ -82,10 +82,71 @@ class WorkspaceEntryTests(unittest.TestCase):
         self.assertEqual(WorkspaceService(lambda:[]).start()['status'],'unbound')
         with self.assertRaises(ValueError):WorkspaceService(lambda:[]).start(resume={'realm':'realm:test','id':'x','revision':1,'digest':'0'*64})
 
+    def test_working_entries_are_pinned_reading_material_without_acceptance(self):
+        ref = self.add('working', 'The selected prior result.')
+        self.add('working', 'The newer result.', revision=2)
+        route = {'realm_id':'realm:test', 'realm_alias':'personal', 'owner_projection':'personal',
+                 'scopes':['scope'], 'context':self.app.context, 'working_entries':[ref]}
+        result = WorkspaceService(lambda:[route]).start(task='unmatched')
+        context = result['contexts'][0]
+        self.assertEqual([ref], [x['reference'] for x in context['work_view']['selected_material']])
+        self.assertFalse(context['work_view']['accepted_commitments'])
+        self.assertFalse(context['records'][0]['governs'])
+        self.assertTrue(WorkspaceService(lambda:[route]).start(budget=1)['blocked'])
+        route['working_entries'] = [{**ref, 'realm':'realm:other'}]
+        with self.assertRaises(ValueError): WorkspaceService(lambda:[route]).start()
+
+    def test_historical_working_entry_uses_matching_snapshot_for_unpinned_grounds(self):
+        self.add('basis', 'Original evidence.')
+        old = self.add('subject', 'Original subject.', depends_on=['basis'])
+        self.add('subject', 'New subject.', revision=2, depends_on=['basis'])
+        self.add('basis', 'New evidence.', revision=2)
+        result = self.app.context(['scope'],task='unmatched',focus=[old])
+        self.assertFalse(result['blocked'])
+        self.assertEqual({'Original evidence.','Original subject.'}, {r['body'] for r in result['records']})
+        self.assertTrue(result['manifest']['incomplete'])
+        self.assertIn('initial publication is not identified', result['warnings'][0])
+
+    def test_unpinned_grounds_are_not_a_claim_about_first_publication(self):
+        self.add('basis', 'First evidence.')
+        old = self.add('subject', 'First subject.', depends_on=['basis'])
+        self.add('basis', 'Later evidence.', revision=2)
+        self.add('subject', 'Later subject.', revision=2)
+        result = self.app.context(['scope'], task='unmatched', focus=[old])
+        self.assertFalse(result['blocked'])
+        self.assertEqual({'First subject.','Later evidence.'}, {r['body'] for r in result['records']})
+        self.assertTrue(result['manifest']['incomplete'])
+        self.assertIn('initial publication is not identified', result['warnings'][0])
+
+    def test_alias_search_returns_all_readable_ids_and_rename_keeps_identity(self):
+        first = self.add('first', 'body', aliases=['unique-alias'])
+        second = self.add('second', 'body', aliases=['unique-alias'])
+        hits = self.app.search_records(['scope'], query='unique-alias')['results']
+        self.assertCountEqual([first, second], [hit['reference'] for hit in hits])
+        self.assertCountEqual(['first','second'], [r['id'] for r in self.app.context(['scope'],task='unique-alias')['records']])
+        metadata = self.app.fetch_record(['scope'], first)['metadata']
+        self.app.apply(self.app.propose({'records/first.md':None, 'records/renamed.md':self.codec.encode(metadata,'body')}), idempotency_key='rename')
+        self.assertEqual('records/renamed.md', self.app.fetch_record(['scope'], first)['path'])
+
+    def test_home_cwd_restriction_and_denied_binding_never_becomes_personal(self):
+        doc = {'schema':'ekk.profile/0.1','uid':os.getuid(),'realms':{},
+               'home':{'realm_alias':'personal','realm_id':'realm:test','contexts':['scope'],
+                       'cwd_roots':[str(self.root/'personal')]}}
+        (self.root/'personal.yaml').write_text(yaml.safe_dump(doc))
+        with patch.object(LocalProfile,'resolve',return_value=(self.root,{'id':'realm:test'})):
+            profile = LocalProfile('personal',directory=self.root)
+            self.assertIsNone(profile.home(cwd=self.root/'company'))
+            self.assertIsNotNone(profile.home(cwd=self.root/'personal'/'ideas'))
+            self.assertIsNotNone(profile.home(cwd=self.root/'company',explicit=True))
+        with patch('ekk.adapters.command_line.binding',return_value=(self.root,{})), patch('ekk.adapters.command_line._routes',side_effect=PermissionError('denied')), patch('ekk.adapters.command_line.LocalProfile') as factory:
+            with self.assertRaises(PermissionError):dispatch(parser().parse_args(['enter','--personal']),{})
+            factory.assert_not_called()
+
     def test_cli_home_only_unbound_or_explicit_personal(self):
         class Profile:
             def __init__(self,*args):pass
-            def home(inner):return {'path':self.root,'alias':'personal','manifest':{'id':'realm:test'},'scopes':['scope']}
+            def home(inner, **kwargs):return {'path':self.root,'alias':'personal','manifest':{'id':'realm:test'},'scopes':['scope']}
+            def workspace(inner, cwd):raise ValueError('Workspace binding absent')
         def parse(*extra):return parser().parse_args(['enter','--cwd',str(self.root),'--task','idea',*extra])
         with patch('ekk.adapters.command_line.LocalProfile',Profile),patch('ekk.adapters.command_line.binding',return_value=None),patch('ekk.adapters.command_line.service',return_value=self.app):
             result=dispatch(parse(),{})

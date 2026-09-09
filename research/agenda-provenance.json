@@ -1,0 +1,155 @@
+{
+  "edition_date": "2026-09-09",
+  "kind": "editorial_adaptation",
+  "language": "en",
+  "note": "Exact hashes identify owner-preserved originals and working synthesis. Outputs reconcile and adapt the drafts; they are not byte-identical translations or empirical findings. The 2026-09-09 revision integrates the owner-selected Belief Runtime conceptual direction and its designed-not-run action-readiness comparison. Input classification and execution/publication authority are unchanged.",
+  "outputs": [
+    {
+      "derived_from": [
+        "source-a",
+        "source-b",
+        "source-c",
+        "question-cards",
+        "working-agenda",
+        "belief-owner-source",
+        "belief-reviewed-synthesis"
+      ],
+      "path": "research/agenda.md",
+      "sha256": "88c11e73e1f512fea00daf54f8fa830a555d5272eba574511d1bcc535792a10b",
+      "treatment": "english_editorial_adaptation"
+    },
+    {
+      "derived_from": [
+        "source-review",
+        "belief-source-checks"
+      ],
+      "path": "research/related-work.md",
+      "sha256": "e2df67c456e4fb5c98efc3084c69f7792dfe7237f920385a1ba2dbc292200ffa",
+      "treatment": "english_editorial_adaptation"
+    },
+    {
+      "derived_from": [
+        "first-study-design"
+      ],
+      "path": "research/studies/method-applicability/README.md",
+      "sha256": "2f899c5cbec41b41f41b9f3836307621f3a7e4d69aaf5aa45399e7712dee2a9b",
+      "treatment": "english_editorial_adaptation"
+    },
+    {
+      "derived_from": [
+        "product-plan",
+        "implementation-report",
+        "working-agenda",
+        "first-study-design",
+        "belief-owner-source",
+        "belief-reviewed-synthesis"
+      ],
+      "path": "ROADMAP.md",
+      "sha256": "0924dfcc1950bfc5ef0cfe9a2ea8f219b0932dcf969638effb66c0eb93b4c916",
+      "treatment": "new_proposed_plan"
+    },
+    {
+      "path": "research/studies/action-readiness/README.md",
+      "derived_from": [
+        "belief-owner-source",
+        "belief-reviewed-synthesis",
+        "belief-source-checks"
+      ],
+      "treatment": "english_editorial_adaptation_and_study_design",
+      "sha256": "71cbfb51ff3449a507ef256dd70cf18083ea431419129180e05aef97bace8e7b"
+    }
+  ],
+  "schema": "ekk.research-editorial-provenance/0.1",
+  "sources": [
+    {
+      "bytes": 75826,
+      "distributed": false,
+      "id": "source-a",
+      "kind": "owner_preserved_source",
+      "language": "primarily_ru",
+      "sha256": "f4281e4f10131b794c499c1a69928b2e49d90a367e32ddf6d615f00a54251f3d"
+    },
+    {
+      "bytes": 81364,
+      "distributed": false,
+      "id": "source-b",
+      "kind": "owner_preserved_source",
+      "language": "primarily_ru",
+      "sha256": "60ee9c83f03da39baa1e3129aeadb2eedc3bad88f461896359c70bbeffcee336"
+    },
+    {
+      "bytes": 105472,
+      "distributed": false,
+      "id": "source-c",
+      "kind": "owner_preserved_source",
+      "language": "primarily_ru",
+      "sha256": "b61d33ee9dc7f8929c815cf85d4c758f8bba7dd1856bfef73b8da9af7b6a26db"
+    },
+    {
+      "bytes": 23970,
+      "distributed": false,
+      "id": "question-cards",
+      "kind": "owner_preserved_working_synthesis",
+      "sha256": "3b3719e90a6f46845d2813ac5939b3a0f852515cd0a0fda740524ebfaec38bc5"
+    },
+    {
+      "bytes": 19892,
+      "distributed": false,
+      "id": "working-agenda",
+      "kind": "owner_preserved_working_synthesis",
+      "sha256": "34476404c5570dc72979a459843c2be611b7fb2f558e80ef2f33e80239cd693d"
+    },
+    {
+      "bytes": 19014,
+      "distributed": false,
+      "id": "first-study-design",
+      "kind": "owner_preserved_working_synthesis",
+      "sha256": "ca1ef1120a34bd1e8379b5b4806cc41a53a7c86822e22bce58248117e9ab0eb3"
+    },
+    {
+      "bytes": 17319,
+      "distributed": false,
+      "id": "source-review",
+      "kind": "owner_preserved_working_synthesis",
+      "sha256": "ee6d2f039f12e7e3d03af0051f40fd6497bdfa8240150b87bc70c352b1d36d0e"
+    },
+    {
+      "bytes": 41145,
+      "distributed": false,
+      "id": "product-plan",
+      "kind": "owner_preserved_working_synthesis",
+      "sha256": "7238cb17a8d89ab0a3e058063b80ae685c221e63546e7bae7638255ae7b4226a"
+    },
+    {
+      "bytes": 8715,
+      "distributed": false,
+      "id": "implementation-report",
+      "kind": "owner_preserved_working_synthesis",
+      "sha256": "aeb9ac9c0ea9e3acc4b799a21469259d9ccff9619c81367e8bb4b0dc05576420"
+    },
+    {
+      "id": "belief-owner-source",
+      "kind": "owner_preserved_source",
+      "language": "ru",
+      "distributed": false,
+      "bytes": 40719,
+      "sha256": "14b3de138b6079610013aba26383b239cea87fc5d661c47e2a7c513b88a4b8c6"
+    },
+    {
+      "id": "belief-reviewed-synthesis",
+      "kind": "owner_preserved_working_synthesis",
+      "language": "ru",
+      "distributed": false,
+      "bytes": 25853,
+      "sha256": "9f6eeda7063807cae10f5433a10d5181ec2c0858fd39ca271347b20ae277210d"
+    },
+    {
+      "id": "belief-source-checks",
+      "kind": "owner_preserved_source_review",
+      "language": "en",
+      "distributed": false,
+      "bytes": 5332,
+      "sha256": "aec2da10df00796b30a01442fb6ac2b23ac577c0effa4bf3269f820d72028709"
+    }
+  ]
+}

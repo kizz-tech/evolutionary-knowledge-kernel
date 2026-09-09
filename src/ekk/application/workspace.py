@@ -19,6 +19,20 @@ def exact_reference(ref):
     return {**ref, 'digest': 'sha256:' + ref['digest'].removeprefix('sha256:')}
 
 
+def working_references(values, realm_id):
+    """Explicit reading material, never an acceptance or an inferred owner."""
+    if not isinstance(values, list) or len(values) > 16:
+        raise ValueError('working_entries must contain at most 16 exact references')
+    result = []
+    for value in values:
+        ref = exact_reference(value)
+        if ref['realm'] != realm_id:
+            raise ValueError('working entry belongs to another realm')
+        if ref not in result:
+            result.append(ref)
+    return result
+
+
 class WorkspaceService:
     def __init__(self, resolver):
         self.resolver = resolver
@@ -38,8 +52,10 @@ class WorkspaceService:
         for route in routes:
             if route['owner_projection'] not in ('personal', 'shared'):
                 raise ValueError('Explicit projection owner required')
-            result = route['context'](route['scopes'], task=task, budget=budget,
-                                      focus=[ref] if ref and route is matches[0] else [])
+            selected = working_references(route.get('working_entries', []), route['realm_id'])
+            if ref and route is matches[0] and ref not in selected:
+                selected.append(ref)
+            result = route['context'](route['scopes'], task=task, budget=budget, focus=selected)
             if result['manifest']['realm_id'] != route['realm_id']:
                 raise ValueError('Context realm differs from resolved route')
             contexts.append({**result, 'work_view': work_view(result, route.get('method_availability')), 'realm_alias': route['realm_alias'],
@@ -56,6 +72,7 @@ def work_view(context, method_availability=None):
     def anchor(row):
         return {'title': row['metadata']['title'], 'reference': {'realm': realm, 'id': row['id'],
                 'revision': row['metadata']['revision'], 'digest': 'sha256:' + row['digest']}}
+    selected = context['manifest'].get('forced_refs', [])
     offers = []
     for row in rows:
         declaration = row['metadata'].get('method_admission', {})
@@ -66,9 +83,14 @@ def work_view(context, method_availability=None):
         offers.append({'method': declaration['method'], 'admission': anchor(row)['reference'],
                        'execution': 'requires_current_canonical_and_host_admission'})
     return {'schema': 'ekk.work-view/0.1', 'intention': context.get('task', ''),
+            'selected_material': [anchor(r) for r in rows if anchor(r)['reference'] in selected],
             'accepted_commitments': [anchor(r) for r in rows if r.get('governs')],
             'visible_questions': [anchor(r) for r in rows if r['metadata']['kind'] == 'question'],
             'visible_results': [anchor(r) for r in rows if r['metadata']['kind'] in ('outcome', 'observation')],
             'method_offers': offers,
+            'challenges': context.get('insights', {}).get('challenges', []),
+            'changed_grounds': context.get('insights', {}).get('changed_grounds', []),
+            'statement_attribution': 'recorded; not truth, trust or execution authority',
+            'context_incomplete': bool(context['manifest'].get('incomplete')),
             'coverage': 'emitted projection only', 'retained_intention': False,
             'execution_authority': 'external owning runtime', 'human_understanding': 'not_inferred'}

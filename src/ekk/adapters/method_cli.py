@@ -12,6 +12,38 @@ from .method_execution import LocalMethodExecutor
 from .builtin_methods import registry
 from ekk.application.methods import MethodService
 
+OPERATIONS = frozenset({'propose','evaluate','admit','use','reconsider','quarantine','retire','export','receive','inspect'})
+
+
+def dispatch(app, scopes, operation, request):
+    from .operation_diagnostics import observed_call
+    realm = app.codec.load_yaml(app.store.snapshot()['files']['.ekk/realm.yaml'])['id']
+    key = request.get('idempotency_key') if isinstance(request, dict) else None
+    return observed_call('method.' + operation, lambda: _dispatch(app, scopes, operation, request),
+                         realm_id=realm, principal=app.principal, key=key if isinstance(key, str) else None)
+
+
+def _dispatch(app, scopes, operation, request):
+    """Shared local method entry for CLI and private transports; no caller code loading."""
+    from copy import deepcopy
+    if operation not in OPERATIONS or not isinstance(request, dict):
+        raise ValueError('known method operation and object request required')
+    request = deepcopy(request)
+    repo = RealmMethodRepository(app, scopes=scopes, journal_root=data_home()/'method-proposals')
+    executor = LocalMethodExecutor(registry(), data_home()/'method-evidence',
+        authorize=lambda operation, method, facts: method['spec']['privileges'] == [])
+    coordinator = MethodService(repo, executor)
+    if operation == 'propose':
+        request['artifact'] = base64.b64decode(request.pop('artifact_base64'), validate=True)
+    if operation == 'inspect':
+        if set(request) != {'reference'}:
+            raise ValueError('inspect requires only an exact reference')
+        loaded = repo.load(request['reference'])
+        result = {key: value for key, value in loaded.items() if key != 'artifact'}
+        result['local_admission'] = repo.active(request['reference'])
+        return result
+    return getattr(coordinator, operation)(**request)
+
 
 def main(argv=None):
     p=argparse.ArgumentParser(prog='ekk method', description=__doc__)
@@ -33,20 +65,8 @@ def main(argv=None):
         if not scopes:
             manifest=app.codec.load_yaml(app.store.snapshot()['files']['.ekk/realm.yaml'])
             scopes=[manifest['default_context']] if manifest.get('default_context') else []
-        repo=RealmMethodRepository(app,scopes=scopes,journal_root=data_home()/'method-proposals')
-        executor=LocalMethodExecutor(registry(), data_home()/'method-evidence',
-            authorize=lambda operation,method,facts: method['spec']['privileges']==[])
-        coordinator=MethodService(repo,executor)
         request=json.loads(args.json.read_text() if args.json else sys.stdin.read())
-        if not isinstance(request,dict):raise ValueError('object request required')
-        if args.operation=='propose':
-            request['artifact']=base64.b64decode(request.pop('artifact_base64'),validate=True)
-        if args.operation=='inspect':
-            loaded=repo.load(request['reference'])
-            result={k:v for k,v in loaded.items() if k!='artifact'}
-            result['local_admission']=repo.active(request['reference'])
-        else:
-            result=getattr(coordinator,args.operation)(**request)
+        result=dispatch(app,scopes,args.operation,request)
         print(json.dumps(result,ensure_ascii=False,indent=2))
         return 0
     except (ValueError,OSError,KeyError,TypeError) as exc:

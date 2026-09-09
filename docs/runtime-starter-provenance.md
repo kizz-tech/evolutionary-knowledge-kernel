@@ -1,6 +1,6 @@
 # English edition and preserved sources
 
-Version 0.5.0 publishes English documentation, method packs, synthetic fixtures
+Version 0.7.0 publishes English documentation, method packs, synthetic fixtures
 and validator messages. These are reviewed translations of the earlier supplied
 materials, not byte-identical originals and not evidence that historical design
 claims have become implemented. Current behavior is described in final-architecture.md.
@@ -29,5 +29,5 @@ python examples/starter/ekk-blueprint/ekk/tools/validate.py examples/starter/ekk
 ```
 
 Historical plans and source assertions remain historical even when translated.
-The model-effectiveness study has not run. See release-validation.md for actual
+The model-effectiveness study has not run. See upgrading.md for the explicit host pack-provider option and release-validation.md for actual
 runtime, localization, installation and publication-candidate checks.

@@ -1,5 +1,7 @@
 # Evaluated, transferable, revisable methods
 
+For result retention, explicit challenges, current file evidence and owner recovery, see [daily reliability](daily-reliability.md).
+
 Use `ekk method OPERATION` with the current `--cwd` binding or one explicitly
 selected `--profile`/`--realm`/`--scope`. Mutations target exactly one owning realm.
 Pass a JSON request through stdin or `--json FILE`. `ekk method --help` lists the

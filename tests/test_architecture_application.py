@@ -3,10 +3,11 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 from ekk.adapters.git_store import GitStore
 from ekk.adapters.markdown import MarkdownCodec
 from ekk.application import RealmService
-from ekk.model import digest
+from ekk.model import Conflict, IdempotencyConflict, digest
 
 class ApplicationTests(unittest.TestCase):
     def setUp(self):
@@ -251,6 +252,34 @@ class ApplicationTests(unittest.TestCase):
         m['revision']=2;self.add(m,'later body')
         self.assertEqual(first,self.app.apply(proposal,idempotency_key='original-request'))
         self.assertEqual(self.app._load(self.store.snapshot())[-1]['retry-note']['body'],'later body')
+
+    def test_unpublished_stale_base_stops_before_history_scan_and_store_apply(self):
+        proposal=self.app.propose({'records/new.md':self.codec.encode(self.meta('new'))})
+        self.add(self.meta('competing'))
+        with patch.object(self.store,'history',wraps=self.store.history) as history, patch.object(self.store,'apply',wraps=self.store.apply) as apply:
+            with self.assertRaises(Conflict):self.app.apply(proposal,idempotency_key='stale-new')
+            apply.assert_not_called()
+            # One history read selects the original base's alias mode. The
+            # all-history recreated-ID scan and its per-snapshot loads never run.
+            self.assertEqual(1,history.call_count)
+
+    def test_stale_changed_key_is_rejected_before_stale_error(self):
+        metadata=self.meta('exact-key')
+        proposal=self.app.propose({'records/exact-key.md':self.codec.encode(metadata,'original')})
+        receipt=self.app.apply(proposal,idempotency_key='exact-key')
+        self.add(self.meta('later'))
+        changed=self.app.propose({'records/exact-key.md':self.codec.encode(metadata,'different')},base=proposal['base'])
+        with self.assertRaises(IdempotencyConflict):self.app.apply(changed,idempotency_key='exact-key')
+        self.assertEqual(receipt,self.app.apply(proposal,idempotency_key='exact-key'))
+
+    def test_current_write_revocation_precedes_stale_lookup(self):
+        proposal=self.app.propose({'records/new.md':self.codec.encode(self.meta('new'))})
+        snapshot=self.store.snapshot();policy=self.codec.load_yaml(snapshot['files']['.ekk/governance.yaml'])
+        policy['version']+=1;policy['grants'][0]['actions'].remove('write')
+        self.app.configure({'.ekk/governance.yaml':self.codec.dump_yaml(policy)},base=snapshot['revision'],idempotency_key='revoke-write')
+        with patch.object(self.store,'lookup',wraps=self.store.lookup) as lookup:
+            with self.assertRaises(PermissionError):self.app.apply(proposal,idempotency_key='stale-denied')
+            lookup.assert_not_called()
 
     def test_exact_pack_artifact_inventory_is_verified(self):
         fixture=Path(__file__).resolve().parents[1]/'examples/starter/ekk-blueprint/ekk/packs/base'

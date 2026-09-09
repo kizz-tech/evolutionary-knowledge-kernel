@@ -1,5 +1,6 @@
 """Locate exact release resources in editable checkouts and installed wheels."""
 from importlib.resources import files
+import os
 from pathlib import Path
 
 
@@ -19,4 +20,12 @@ def schema_directory():
 
 
 def pack_directory():
+    # Host installation configuration only. Realm content never selects a provider.
+    configured = os.environ.get('EKK_PACK_DIRECTORY')
+    if configured is not None:
+        candidate = Path(configured)
+        if (not configured or not candidate.is_absolute() or not candidate.is_dir()
+                or candidate.is_symlink()):
+            raise ValueError('EKK_PACK_DIRECTORY must be an existing absolute non-symlink directory')
+        return candidate.resolve()
     return _directory('ekk._packs', 'packs', 'base')

@@ -4,7 +4,7 @@ Published commits are atomic snapshots; arbitrary filesystem readers are not.
 The flock coordinates cooperating writers, not external editors or other hosts.
 Runtime journals are durable data and must be backed up with the repository.
 """
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 import fcntl
 import json
@@ -18,6 +18,7 @@ import unicodedata
 
 from ekk.model import (Conflict, DirtyWorkingTree, IdempotencyConflict,
                        RecoveryConflict, StoreError, ValidationError, digest)
+from .file_lock import acquire_lock
 
 REF = "refs/ekk/published"
 
@@ -115,7 +116,7 @@ class GitStore:
         if lock.is_symlink():
             raise StoreError("Invalid writer lock")
         with lock.open("a+b") as stream:
-            fcntl.flock(stream, fcntl.LOCK_EX)
+            acquire_lock(stream, kind='writer')
             marker = git_dir / "ekk-store-path"
             stage_path = git_dir / "ekk-recovery-clone.json"
             if marker.is_symlink() or stage_path.is_symlink():
@@ -203,8 +204,16 @@ class GitStore:
                       "GIT_COMMITTER_NAME": "EKK", "GIT_COMMITTER_EMAIL": "ekk@localhost"})
         if env:
             clean.update(env)
-        result = subprocess.run(["git", "-c", "core.fsync=committed", "-c", "core.fsyncMethod=fsync", "-C", str(getattr(self, "repository_root", self.path)), *args], input=data,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=clean)
+        # Large batch input and blob output can fill both pipes on supported
+        # hosts. A private anonymous input file removes that duplex dependency;
+        # communicate still drains stdout/stderr and no source enters a shell.
+        with tempfile.TemporaryFile(mode='w+b') if data is not None else nullcontext(None) as source:
+            if source is not None:
+                source.write(data)
+                source.flush()
+                source.seek(0)
+            result = subprocess.run(["git", "-c", "core.fsync=committed", "-c", "core.fsyncMethod=fsync", "-C", str(getattr(self, "repository_root", self.path)), *args], stdin=source,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=clean)
         if check and result.returncode:
             raise StoreError(result.stderr.decode(errors="replace").strip())
         return result
@@ -217,7 +226,7 @@ class GitStore:
         if lock.is_symlink():
             raise StoreError("Invalid writer lock")
         with lock.open("a+b") as stream:
-            fcntl.flock(stream, fcntl.LOCK_EX)
+            acquire_lock(stream, kind='writer')
             self.runtime_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
             owner = self.runtime_dir / "store-path"
             try:
@@ -273,8 +282,8 @@ class GitStore:
             if any(str(p) in names for p in PurePosixPath(name).parents if str(p) != "."):
                 raise ValidationError("File/directory path collision")
 
-    def _read_commit(self, revision):
-        entries = []
+    def _read_tree(self, revision):
+        entries = {}
         result = self._git("ls-tree", "-rz", "--full-tree", revision).stdout
         for entry in result.split(b"\x00"):
             if not entry:
@@ -285,10 +294,13 @@ class GitStore:
                 raise StoreError("Snapshot contains a symlink or unsupported Git object")
             name = name.decode("utf-8")
             self._path(name, inspect=False)
-            entries.append((name, oid))
+            entries[name] = oid
+        return entries
+
+    def _read_blobs(self, oids):
         # Object IDs, never record-controlled expressions, enter the batch protocol.
         # Its length framing preserves arbitrary binary bytes and embedded newlines.
-        objects = dict.fromkeys(oid for _, oid in entries)
+        objects = dict.fromkeys(oids)
         if objects:
             batch = self._git("cat-file", "--batch", data=b"".join(oid + b"\n" for oid in objects)).stdout
             offset = 0
@@ -305,7 +317,14 @@ class GitStore:
                 offset += size + 1
             if offset != len(batch):
                 raise StoreError("Unexpected bytes after Git blob batch")
-        return {"revision": revision, "files": {name: objects[oid] for name, oid in entries}}
+        return objects
+
+    def _read_files(self, tree):
+        objects = self._read_blobs(tree.values())
+        return {name: objects[oid] for name, oid in tree.items()}
+
+    def _read_commit(self, revision):
+        return {"revision": revision, "files": self._read_files(self._read_tree(revision))}
 
     def snapshot(self, revision=None):
         head = self._head()
@@ -325,7 +344,8 @@ class GitStore:
         return self._git("rev-list", head).stdout.decode().splitlines()
 
     def _read_evidence(self, revision):
-        return GitStore._read_commit(self, revision)
+        # Operation evidence is a whole Git tree, including for contained realms.
+        return {"revision": revision, "files": self._read_files(GitStore._read_tree(self, revision))}
 
     def _commit_evidence(self, files, base):
         return GitStore._commit(self, files, base)
@@ -400,7 +420,10 @@ class GitStore:
             result = self._git("update-ref", self.publication_ref, journal["revision"], journal["base"] or "0" * 40, check=False)
             if result.returncode:
                 raise Conflict("Published snapshot changed during CAS")
+            self._observed_receipt(journal['receipt'], replayed=False)
             self._checkpoint("published")
+        else:
+            self._observed_receipt(journal['receipt'], replayed=True)
         if not any(self._index_matches(revision) for revision in (journal["base"], journal["revision"])):
             raise RecoveryConflict("External staged changes block recovery")
         if self._head() != journal["revision"]:
@@ -443,6 +466,21 @@ class GitStore:
         receipts = []
         reconstructed = False
         completed_projection = None
+        trees, blob_digests = {}, {}
+
+        def verified_tree(revision):
+            if revision is None:
+                return {}
+            if revision not in trees:
+                tree = self._read_tree(revision)
+                # Read every historical blob, including deleted baseline files,
+                # once per recovery. Cache only derived digests, never authority
+                # across calls or full copies of every historical snapshot.
+                missing = (oid for oid in tree.values() if oid not in blob_digests)
+                for oid, raw in self._read_blobs(missing).items():
+                    blob_digests[oid] = digest(raw)
+                trees[revision] = tree
+            return trees[revision]
         # Git retains request/receipt evidence independently of runtime journals.
         # A ref created before the journal write is also a recoverable operation.
         refs = self._git("for-each-ref", "--format=%(refname) %(objectname)", self.operations_ref).stdout.decode().splitlines()
@@ -480,14 +518,14 @@ class GitStore:
                     raise ValueError("Invalid receipt fields")
                 if datetime.fromisoformat(receipt["recorded_at"]).tzinfo is None:
                     raise ValueError("Invalid receipt time")
-                before = self._read_commit(journal["base"])["files"] if journal["base"] else {}
-                after = self._read_commit(revision)["files"]
+                before = verified_tree(journal["base"])
+                after = verified_tree(revision)
                 expected = dict(before)
                 for name, content_digest in request["changes"].items():
                     self._path(name, inspect=False)
                     if content_digest is None:
                         expected.pop(name, None)
-                    elif not isinstance(content_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", content_digest) or name not in after or digest(after[name]) != content_digest:
+                    elif not isinstance(content_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", content_digest) or name not in after or blob_digests[after[name]] != content_digest:
                         raise ValueError("Request content digest does not match target")
                     else:
                         expected[name] = after[name]
@@ -504,7 +542,7 @@ class GitStore:
                     if runtime["state"] == "complete" and (not current or self._git("merge-base", "--is-ancestor", revision, current, check=False).returncode):
                         raise ValueError("Completed operation is not in published history")
                     if runtime["state"] == "complete" and revision == current:
-                        completed_projection = after
+                        completed_projection = revision
                 except (TypeError, ValueError) as exc:
                     raise RecoveryConflict("Runtime journal does not match durable operation evidence") from exc
                 continue
@@ -522,12 +560,14 @@ class GitStore:
                 raise StoreError("Invalid journal path")
             journal = json.loads(path.read_text())
             if journal["state"] != "complete":
-                receipts.append(self._finish(path, journal))
+                from .operation_diagnostics import observe_recovery
+                receipts.append(observe_recovery(lambda: self._finish(path, journal), journal['receipt']))
                 completed_projection = None
         if reconstructed and self._head():
-            completed_projection = self._read_commit(self._head())["files"]
+            completed_projection = self._head()
         if completed_projection is not None:
-            self._check_clean(completed_projection, completed_projection)
+            files = self._read_commit(completed_projection)["files"]
+            self._check_clean(files, files)
         return receipts
 
     def recover(self):
@@ -570,7 +610,18 @@ class GitStore:
             request = self._request(changes, base, principal, policy_digest)
             if journal["request_digest"] != digest(json.dumps(request, sort_keys=True).encode()):
                 raise IdempotencyConflict("Idempotency key is bound to different content or authority")
-            return journal["receipt"] | {"idempotency_key": idempotency_key}
+            return self._observed_receipt(journal["receipt"] | {"idempotency_key": idempotency_key}, replayed=True)
+
+    @staticmethod
+    def _observed_receipt(receipt, *, replayed):
+        # This owning publication path can distinguish replay from a new write.
+        # A diagnostic dependency must never discard a confirmed domain receipt.
+        try:
+            from .operation_diagnostics import note_publication
+            note_publication(receipt, replayed=replayed)
+        except Exception:
+            pass
+        return receipt
 
     def _publish(self, files, changes, *, base, key, principal, policy_digest):
         request = self._request(changes, base, principal, policy_digest)
@@ -581,7 +632,7 @@ class GitStore:
             if journal["request_digest"] != request_digest:
                 raise IdempotencyConflict("Idempotency key is bound to different content or authority")
             receipt = journal["receipt"] if journal["state"] == "complete" else self._finish(path, journal)
-            return receipt | {"idempotency_key": key}
+            return self._observed_receipt(receipt | {"idempotency_key": key}, replayed=True)
         revision = self._commit(files, base)
         receipt = {"base": base, "revision": revision, "idempotency_key_digest": digest(key.encode()),
                    "principal": principal, "policy_digest": policy_digest,
@@ -593,7 +644,7 @@ class GitStore:
         self._checkpoint("recorded")
         self._save(path, journal)
         self._checkpoint("prepared")
-        return self._finish(path, journal) | {"idempotency_key": key}
+        return self._observed_receipt(self._finish(path, journal) | {"idempotency_key": key}, replayed=False)
 
     def apply(self, changes, *, base, idempotency_key, principal, policy_digest):
         self._validate_files(changes, deletes=True)

@@ -14,6 +14,7 @@ import tempfile
 
 from ekk.adapters.git_store import GitStore, _atomic, _mkdir_durable
 from ekk.model import RecoveryConflict, StoreError, ValidationError, digest
+from .file_lock import acquire_lock
 
 
 class ContainedGitStore(GitStore):
@@ -103,7 +104,7 @@ class ContainedGitStore(GitStore):
 
     @classmethod
     def rebind_runtime(cls, realm_path, repository_root, publication_ref, runtime_dir, *,
-                       expected_previous_repository, expected_previous_realm):
+                       expected_previous_repository, expected_previous_realm, expected_operation_refs=None):
         """Activate only an isolated full copy, retaining its operation namespace.
 
         This neither retires the source writer nor changes project routing. The
@@ -135,7 +136,7 @@ class ContainedGitStore(GitStore):
                     raise StoreError("Recovery Git metadata and objects must not be linked to another copy")
         lock = clone.git_dir / "ekk-writer.lock"
         with lock.open("a+b") as stream:
-            fcntl.flock(stream, fcntl.LOCK_EX)
+            acquire_lock(stream, kind='writer')
             registration = clone._read_registration()
             restoration = registration.get("restoration") if registration else None
             resumed = (registration is not None and registration.get("owner") == clone._identity)
@@ -188,7 +189,18 @@ class ContainedGitStore(GitStore):
             clone._check_clean(current, current)
             if not clone._git("for-each-ref", "--format=%(refname)", clone.operations_ref).stdout:
                 raise RecoveryConflict("Copy lacks contained operation evidence")
-            if (previous_repo / ".git").is_dir():
+            if expected_operation_refs is not None:
+                if (not isinstance(expected_operation_refs, dict) or not expected_operation_refs
+                        or any(not isinstance(name, str) or not name.startswith(clone.operations_ref)
+                               or not re.fullmatch(r"[0-9a-f]{64}", name[len(clone.operations_ref):])
+                               or not isinstance(oid, str) or not re.fullmatch(r"[0-9a-f]{40}", oid)
+                               for name, oid in expected_operation_refs.items())):
+                    raise ValidationError("Invalid pinned recovery operation refs")
+                copied_refs = dict(line.split() for line in clone._git("for-each-ref",
+                    "--format=%(refname) %(objectname)", clone.operations_ref).stdout.decode().splitlines())
+                if copied_refs != expected_operation_refs:
+                    raise RecoveryConflict("Copy differs from pinned backup operation refs")
+            elif (previous_repo / ".git").is_dir():
                 source_refs = clone._git("-C", str(previous_repo), "for-each-ref",
                                          "--format=%(refname) %(objectname)", clone.operations_ref).stdout.splitlines()
                 copied_refs = clone._git("for-each-ref", "--format=%(refname) %(objectname)",
@@ -231,7 +243,7 @@ class ContainedGitStore(GitStore):
         if lock.is_symlink():
             raise StoreError("Invalid writer lock")
         with lock.open("a+b") as stream:
-            fcntl.flock(stream, fcntl.LOCK_EX)
+            acquire_lock(stream, kind='writer')
             try:
                 self._check_binding()
                 _mkdir_durable(self.runtime_dir)
@@ -264,16 +276,15 @@ class ContainedGitStore(GitStore):
         self._check_binding()
         return super()._head()
 
-    def _read_commit(self, revision):
+    def _read_tree(self, revision):
         entry = self._git("ls-tree", "-z", revision, "--", self._pathspec).stdout
         if not entry:
-            return {"revision": revision, "files": {}}
+            return {}
         metadata, _ = entry.rstrip(b"\0").split(b"\t", 1)
         mode, kind, oid = metadata.split()
         if mode != b"040000" or kind != b"tree":
             raise StoreError("Contained realm must be an ordinary Git tree, not a gitlink or file")
-        snapshot = GitStore._read_commit(self, oid.decode())
-        return {"revision": revision, "files": snapshot["files"]}
+        return GitStore._read_tree(self, oid.decode())
 
     def _read_evidence(self, revision):
         evidence = super()._read_evidence(revision)

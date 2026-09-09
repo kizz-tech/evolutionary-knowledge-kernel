@@ -2,10 +2,10 @@ cff-version: 1.2.0
 message: "If you use this software, please cite this project and its version."
 title: "EKK: Evolutionary Knowledge Kernel"
 type: software
-version: "0.5.0"
+version: "0.7.0"
 authors:
   - name: "Maxim"
-abstract: "Experimental personal work environment with shared continuity and explicitly evaluated, transferable, revisable methods. Includes a preserved knowledge kernel and an unrun four-arm research protocol."
+abstract: "Experimental personal work environment with shared continuity, revisable methods and action-readiness assessment from current context and configured check reports. Empirical effectiveness remains unmeasured."
 license: Apache-2.0
 repository-code: "https://github.com/kizz-tech/evolutionary-knowledge-kernel"
 url: "https://github.com/kizz-tech/evolutionary-knowledge-kernel"

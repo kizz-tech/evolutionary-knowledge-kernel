@@ -29,6 +29,26 @@ aspects. The detector runs only for explicitly registered commitments and visibl
 records. It provides no scheduler, full-world scan, or claim of complete
 observability.
 
+## Action-specific epistemic sufficiency
+
+The [Belief Runtime contract](belief-runtime.md) applies the concept to a
+proposed next action. It keeps the target, version, evidence provenance,
+observation time, invalidation conditions, alternatives and unresolved constraints
+visible. How a proposition was obtained is separate from freshness and conflict:
+an observed proposition can be stale or disputed. Sensor output is fallible.
+
+This is distinct from the four recorded assurance dimensions above. Neither
+`owner_authorized`, a full context pack nor a high confidence label proves that
+the world's relevant conditions have been established. An epistemic assessment
+cannot grant execution authority. Requirements determine when an inference is
+adequate and when a current direct observation is needed.
+
+`needs_observation` identifies a bounded missing check; it does not launch a
+sensor or expand access. If no permitted observation can distinguish relevant
+states, the assessment remains indeterminate. Unknowns unrelated to the action
+should not impose a global stop. The standard observation-gap review API remains
+a narrower registered-record check, not an implementation of this entire loop.
+
 ## Experience compiled into rules
 
 A decision or policy derived from experience may include `evolution`. It must
@@ -46,7 +66,9 @@ without implementing this assessment; reading the same bytes does not confer the
 same behavior guarantees. `ekk assurance --profile PROFILE --realm REALM --scope
 CONTEXT_ID` returns this read-only projection. No combined success score is emitted.
 
-An assessment is a **recorded claim**, not a certification by the storage kernel.
+A recorded assurance assessment is a **recorded claim**, not a certification by
+the storage kernel. A Belief Runtime readiness projection remains temporary;
+separate retention can preserve it only as a historical artifact.
 A pinned note alone does not prove benefit. The domain method owns evidence
 adequacy, source independence and criteria. `scope_of_claim` can state exactly
 what was assessed; when absent, the report explicitly infers no broader guarantee.

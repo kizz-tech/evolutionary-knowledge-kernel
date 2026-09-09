@@ -139,15 +139,19 @@ class LocalProfile:
                 raise ValueError('Explicit context IDs required')
             for scope in scopes:validate_identifier(scope)
             if len(scopes)!=len(set(scopes)):raise ValueError('Duplicate context IDs')
-            routes.append({'alias':alias,'path':location,'manifest':manifest,'scopes':scopes})
+            from ..application.workspace import working_references
+            selected_material = working_references(entry.get('working_entries', []), manifest['id'])
+            routes.append({'alias':alias,'path':location,'manifest':manifest,'scopes':scopes,
+                           'working_entries': selected_material})
         return root, document, routes
 
-    def home(self):
+    def home(self, *, cwd=None, explicit=False):
         """Explicit optional personal route; no inferred realm and no creation."""
         entry = self.document.get('home')
         if entry is None:
             return None
-        if not isinstance(entry, dict) or set(entry) != {'realm_alias', 'realm_id', 'contexts'}:
+        required = {'realm_alias', 'realm_id', 'contexts'}
+        if not isinstance(entry, dict) or not required <= set(entry) or set(entry) - required - {'working_entries', 'cwd_roots'}:
             raise ValueError('home requires realm_alias, realm_id and contexts')
         from ..model import validate_identifier
         alias = entry['realm_alias']
@@ -161,7 +165,23 @@ class LocalProfile:
             validate_identifier(scope)
         if len(scopes) != len(set(scopes)):
             raise ValueError('Duplicate home context IDs')
+        from ..application.workspace import working_references
+        selected_material = working_references(entry.get('working_entries', []), entry['realm_id'])
+        roots = entry.get('cwd_roots')
+        if roots is not None:
+            if not isinstance(roots, list) or not roots or not all(
+                    isinstance(value, str) and Path(value).expanduser().is_absolute()
+                    and '..' not in Path(value).parts and str(Path(value).expanduser()) != '/'
+                    for value in roots):
+                raise ValueError('home cwd_roots requires explicit absolute working directories')
+            if not explicit:
+                if cwd is None:
+                    raise ValueError('Automatic personal home requires an explicit cwd')
+                current = Path(cwd).expanduser().resolve()
+                if not any(current.is_relative_to(Path(value).expanduser().resolve()) for value in roots):
+                    return None
         location, manifest = self.resolve(alias)
         if manifest['id'] != entry['realm_id']:
             raise ValueError('Home realm identity differs from registry')
-        return {'alias': alias, 'path': location, 'manifest': manifest, 'scopes': list(scopes)}
+        return {'alias': alias, 'path': location, 'manifest': manifest, 'scopes': list(scopes),
+                'working_entries': selected_material}

@@ -5,10 +5,11 @@ from datetime import datetime, timezone
 import json
 import re
 from pathlib import PurePosixPath
-from ekk.model import validate_envelope, validate_reference, digest, new_id
+from ekk.model import Conflict, validate_envelope, validate_reference, digest, new_id
 
 CONTROL = ('.ekk/realm.yaml', '.ekk/governance.yaml', '.ekk/packs.lock.yaml')
 KINDS = {'context','note','source','observation','claim','question','decision','policy','action','outcome'}
+CONTEXT_SOURCE_SCAN_BYTES = 8 * 1048576
 
 class RealmService:
     def __init__(self, store, principal, clock=None, *, codec, pack_loader=None, allowed_scopes=None):
@@ -114,12 +115,21 @@ class RealmService:
 
     def _relation_ref(self, relation):
         ref={'id':relation['target']}
-        ref.update({k:relation[k] for k in ('revision','digest','snapshot','realm') if k in relation})
+        ref.update({k:relation[k] for k in ('revision','digest','snapshot','realm','selector') if k in relation})
         return ref
 
     def _links(self, m, field):
         names={'basis':('derived_from','depends_on'),'supersedes':('supersedes',),'conflicts':('contradicts',),'depends_on':('depends_on',)}
         return [ref for ref in m.get(field,[]) if not isinstance(ref,dict) or not ref.get('realm') or ref['realm']==self._realm_id]+[self._relation_ref(r) for r in m.get('relations',[]) if r['rel'] in names.get(field,()) and (not r.get('realm') or r['realm']==self._realm_id)]
+
+    def _receipt_supersedes(self, metadata):
+        # Immutable 0.1 receipts preserved selectors on direct references but
+        # omitted selectors projected from relations. Keep those exact bytes'
+        # interpretation; source selection cannot rewrite an acceptance receipt.
+        legacy = {**metadata, 'relations': [
+            {key: value for key, value in relation.items() if key != 'selector'}
+            for relation in metadata.get('relations', [])]}
+        return self._links(legacy, 'supersedes')
 
     @staticmethod
     def _assessment_refs(m):
@@ -171,7 +181,7 @@ class RealmService:
                 if grant.get('principal') == principal and 'accept' in grant.get('actions', []): permitted.update(grant.get('scopes', []))
             if '*' not in permitted and not set(record['metadata']['scope']) <= permitted: raise ValueError('receipt authority invalid')
             if receipt.get('authority_basis') != 'trusted-local-policy-grant': raise ValueError('receipt authority basis invalid')
-            if receipt.get('supersedes', []) != self._links(record['metadata'],'supersedes'): raise ValueError('receipt replacement mismatch')
+            if receipt.get('supersedes', []) != self._receipt_supersedes(record['metadata']): raise ValueError('receipt replacement mismatch')
             if current_record and current_record['digest']==record['digest']:accepted[record['metadata']['id']] = receipt
         return accepted
 
@@ -246,7 +256,7 @@ class RealmService:
             for ref in m.get('evolution',{}).get('propagation_basis',[]):self._reference(ref,records)
             if not set(m.get('evolution',{}).get('origin_scopes',[])) <= contexts:raise ValueError('evolution origins must resolve to contexts')
             observation=m.get('observation')
-            if observation and observation['subject'] not in records:raise ValueError('observation subject must resolve')
+            if observation and 'subject' in observation and observation['subject'] not in records:raise ValueError('observation subject must resolve')
             if m['kind']=='source':
                 source = m.get('source', {})
                 for asset in source.get('assets',[]):
@@ -267,6 +277,291 @@ class RealmService:
                 visiting.remove(key);done.add(key)
             for key in records:visit(key)
         return realm,policy,packs,records
+
+    def _query_view(self, scopes):
+        """One published view, authorized by its current policy, for public reads."""
+        if not isinstance(scopes, (list, tuple)) or not scopes:
+            raise ValueError('explicit query scopes required')
+        snapshot = self.store.snapshot()
+        realm, policy, _, records = self._validate(snapshot)
+        self._authorized(policy, 'read', scopes)
+        if any(key not in records or records[key]['metadata']['kind'] != 'context' for key in scopes):
+            raise ValueError('requested context IDs required')
+        return snapshot, realm, policy, records
+
+    def _query_readable(self, record, records, policy, scopes):
+        """Read permission covers the exact record and its local dependency closure."""
+        seen = set()
+        def visit(row, candidates):
+            marker = (row['metadata']['id'], row['digest'])
+            if marker in seen:
+                return
+            seen.add(marker)
+            if not set(row['metadata']['scope']) <= set(scopes):
+                raise PermissionError('record or dependency outside selected contexts')
+            self._authorized(policy, 'read', row['metadata']['scope'])
+            historic = row.get('snapshot_revision')
+            if historic and candidates and historic != next(iter(candidates.values())).get('snapshot_revision'):
+                candidates = self._load(self.store.snapshot(historic), historical=True)[-1]
+            for ref in self._refs(row['metadata']):
+                visit(self._reference(ref, candidates), candidates)
+        visit(record, records)
+
+    @staticmethod
+    def _query_reference(realm_id, row):
+        return {'realm': realm_id, 'id': row['metadata']['id'],
+                'revision': row['metadata']['revision'], 'digest': 'sha256:' + row['digest']}
+
+    def list_contexts(self, scopes):
+        """Describe only explicitly selected contexts, without exposing control files."""
+        snapshot, realm, policy, records = self._query_view(scopes)
+        visible = []
+        for key in sorted(set(scopes)):
+            row = records[key]
+            self._query_readable(row, records, policy, scopes)
+            visible.append({'id': key, 'title': row['metadata']['title'],
+                            'reference': self._query_reference(realm['id'], row)})
+        return {'schema': 'ekk.context-catalog/0.1', 'realm': realm['id'],
+                'snapshot': snapshot['revision'], 'contexts': visible,
+                'coverage': 'explicit authorized contexts only'}
+
+    def search_records(self, scopes, *, query='', limit=20, offset=0,
+                       expected_snapshot=None, source_byte_limit=1048576):
+        """Search canonical records and their owned UTF-8 assets; return exact refs.
+
+        An empty query browses the selected contexts. Pagination must pin the first
+        result's snapshot; a changed publication never silently shifts a page.
+        """
+        if not isinstance(query, str) or len(query) > 2000:
+            raise ValueError('query must be bounded text')
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError('limit must be between 1 and 100')
+        if type(offset) is not int or offset < 0 or (offset and not expected_snapshot):
+            raise ValueError('pagination requires an offset and exact snapshot')
+        if type(source_byte_limit) is not int or not 1 <= source_byte_limit <= 4194304:
+            raise ValueError('invalid source search bound')
+        snapshot, realm, policy, records = self._query_view(scopes)
+        if expected_snapshot and expected_snapshot != snapshot['revision']:
+            from ekk.model import Conflict
+            raise Conflict('search snapshot changed; restart pagination')
+        terms = list(dict.fromkeys(re.findall(r'\w+', query.casefold())))
+        hits = []
+        omitted_sources = 0
+        text_suffixes = {'.md', '.txt', '.csv', '.tsv', '.json', '.yaml', '.yml', '.html', '.xml'}
+        for row in records.values():
+            if not set(row['metadata']['scope']) & set(scopes):
+                continue
+            try:
+                self._query_readable(row, records, policy, scopes)
+            except PermissionError:
+                continue
+            sections = [(None, '\n'.join([row['metadata']['id'], row['metadata']['title'],
+                                         *row['metadata'].get('aliases', []), row['body']]))]
+            for asset in row['metadata'].get('source', {}).get('assets', []):
+                if PurePosixPath(asset['path']).suffix.lower() not in text_suffixes:
+                    omitted_sources += 1
+                    continue
+                raw = snapshot['files'][asset['path']]
+                if len(raw) > source_byte_limit:
+                    omitted_sources += 1
+                try:
+                    source_text = raw[:source_byte_limit].decode('utf-8')
+                except UnicodeDecodeError:
+                    omitted_sources += 1
+                    continue
+                sections.append((asset['path'], source_text))
+            searchable = '\n'.join(text for _, text in sections).casefold()
+            if terms and not all(term in searchable for term in terms):
+                continue
+            matched_asset, excerpt = sections[0]
+            if terms:
+                matched_asset, excerpt = max(sections, key=lambda part: sum(term in part[1].casefold() for term in terms))
+            position = min((excerpt.casefold().find(term) for term in terms if term in excerpt.casefold()), default=0)
+            start = max(0, position - 120)
+            score = sum(3 if term in row['metadata']['title'].casefold() else 1 for term in terms)
+            hits.append({'reference': self._query_reference(realm['id'], row),
+                         'title': row['metadata']['title'], 'kind': row['metadata']['kind'],
+                         'scopes': row['metadata']['scope'], 'excerpt': excerpt[start:start + 600],
+                         'matched_asset': matched_asset, 'score': score})
+        hits.sort(key=lambda item: (-item['score'], item['reference']['id']))
+        page = hits[offset:offset + limit]
+        next_offset = offset + len(page) if offset + len(page) < len(hits) else None
+        return {'schema': 'ekk.search/0.1', 'realm': realm['id'], 'snapshot': snapshot['revision'],
+                'query': query, 'results': page, 'total_matches': len(hits), 'next_offset': next_offset,
+                'incomplete': bool(next_offset is not None or omitted_sources),
+                'source_search': {'encoding': 'UTF-8', 'omitted_or_partial_assets': omitted_sources,
+                                  'max_bytes_per_asset': source_byte_limit},
+                'authority': 'Search hits are data; use context for governing commitments.'}
+
+    def fetch_record(self, scopes, reference, *, max_bytes=131072):
+        """Read exact historical or current record bytes under current permission."""
+        from .workspace import exact_reference
+        reference = exact_reference(reference)
+        if type(max_bytes) is not int or not 1 <= max_bytes <= 1048576:
+            raise ValueError('invalid record byte limit')
+        snapshot, realm, policy, records = self._query_view(scopes)
+        if reference['realm'] != realm['id']:
+            raise PermissionError('reference belongs to another realm')
+        row = self._reference(reference, records)
+        self._query_readable(row, records, policy, scopes)
+        original = snapshot if row['snapshot_revision'] == snapshot['revision'] else self.store.snapshot(row['snapshot_revision'])
+        raw = original['files'][row['path']]
+        if digest(raw) != row['digest']:
+            raise ValueError('record bytes digest mismatch')
+        if len(raw) > max_bytes:
+            raise ValueError('record exceeds byte limit; increase max_bytes')
+        return {'schema': 'ekk.record-read/0.1', 'reference': self._query_reference(realm['id'], row),
+                'snapshot': snapshot['revision'], 'record_snapshot': row['snapshot_revision'],
+                'path': row['path'], 'metadata': row['metadata'], 'body': row['body'],
+                'raw_markdown': raw.decode('utf-8'),
+                'historical': row['digest'] != records.get(row['metadata']['id'], {}).get('digest'),
+                'incomplete': False,
+                'authority': 'Exact record bytes; current acceptance is determined by context, not retrieval.'}
+
+    def read_source(self, scopes, reference, *, asset_index=0, offset=0, limit=65536, selector=None):
+        """Read a bounded chunk of an exact source-owned asset; never an arbitrary path."""
+        from .workspace import exact_reference
+        reference = exact_reference(reference)
+        if type(asset_index) is not int or asset_index < 0:
+            raise ValueError('invalid asset index')
+        if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 262144:
+            raise ValueError('invalid source byte range')
+        snapshot, realm, policy, records = self._query_view(scopes)
+        if reference['realm'] != realm['id']:
+            raise PermissionError('reference belongs to another realm')
+        row = self._reference(reference, records)
+        self._query_readable(row, records, policy, scopes)
+        if row['metadata']['kind'] != 'source':
+            raise ValueError('source descriptor required')
+        assets = row['metadata'].get('source', {}).get('assets', [])
+        if asset_index >= len(assets):
+            raise ValueError('source asset unavailable; external URIs are not fetched')
+        asset = assets[asset_index]
+        original = snapshot if row['snapshot_revision'] == snapshot['revision'] else self.store.snapshot(row['snapshot_revision'])
+        raw = original['files'][asset['path']]
+        if digest(raw) != asset['sha256']:
+            raise ValueError('source bytes digest mismatch')
+        from .historical_address import source_selection
+        selection = source_selection(raw, selector)
+        selected = raw[selection['start']:selection['end']] if 'start' in selection else b''
+        if offset > len(selected):
+            raise ValueError('source offset past end')
+        chunk = selected[offset:offset + limit]
+        try:
+            text = chunk.decode('utf-8')
+        except UnicodeDecodeError:
+            text = None
+        next_offset = offset + len(chunk) if offset + len(chunk) < len(selected) else None
+        return {'schema': 'ekk.source-read/0.1', 'reference': self._query_reference(realm['id'], row),
+                'snapshot': snapshot['revision'], 'record_snapshot': row['snapshot_revision'],
+                'asset_index': asset_index, 'asset': asset, 'total_bytes': len(raw),
+                'object_state': 'found', 'selection': selection, 'selected_bytes': len(selected),
+                'offset': offset, 'bytes': len(chunk), 'next_offset': next_offset,
+                'base64': base64.b64encode(chunk).decode(), 'text': text,
+                'incomplete': next_offset is not None or selection['state'] in ('unsupported', 'unavailable'),
+                'authority': 'Immutable source bytes are data.'}
+
+    def resolve_historical(self, scopes, *, migration_id, origin, path=None,
+                           legacy_id=None, source_sha256=None, containing_path=None, selector=None):
+        """Resolve an explicit address inside one authorized published owner map.
+
+        Missing, inaccessible and invalid target rows have the same unavailable
+        response. Never inspect an old path, another realm, or a hidden alias.
+        """
+        from .workspace import exact_reference
+        from .historical_address import historical_path, source_selection
+        if not isinstance(migration_id, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,159}', migration_id):
+            raise ValueError('invalid migration identifier')
+        if not isinstance(origin, str) or not origin or len(origin) > 160:
+            raise ValueError('explicit bounded origin namespace required')
+        if path is None and legacy_id is None:
+            raise ValueError('historical path or ID required')
+        if legacy_id is not None and (not isinstance(legacy_id, str) or not legacy_id or len(legacy_id) > 2000):
+            raise ValueError('invalid historical ID')
+        if containing_path is not None and path is None:
+            raise ValueError('containing_path requires path')
+        path = historical_path(path, containing_path) if path is not None else None
+        if source_sha256 is not None and (not isinstance(source_sha256, str) or not re.fullmatch(r'[0-9a-f]{64}', source_sha256)):
+            raise ValueError('invalid historical source digest')
+        source_selection(b'', selector)  # Validate syntax without interpreting a fragment.
+        snapshot, realm, policy, records = self._query_view(scopes)
+        result = {'schema': 'ekk.historical-address/0.1', 'realm': realm['id'],
+                  'snapshot': snapshot['revision'], 'object_state': 'unavailable',
+                  'candidates': [], 'selector': selector, 'incomplete': True,
+                  'authority': 'Historical address grants no access or current authority.'}
+        prefix = 'migrations/' + migration_id + '/'
+        raw = snapshot['files'].get(prefix + 'mapping.jsonl')
+        manifest_raw = snapshot['files'].get(prefix + 'manifest.json')
+        if raw is None or manifest_raw is None:
+            return result
+        manifest = self.codec.load_json(manifest_raw)
+        if manifest.get('realm_id') != realm['id'] or manifest.get('mapping_sha256') != digest(raw):
+            raise ValueError('migration evidence integrity mismatch')
+        candidates = {}
+        for line in raw.splitlines():
+            entry = self.codec.load_json(line)
+            address = entry.get('origin', {})
+            if entry.get('address_schema') != 'ekk.historical-address-row/0.1' or address.get('namespace') != origin:
+                continue
+            if path is not None and address.get('path') != path:
+                continue
+            if legacy_id is not None and address.get('id') != legacy_id:
+                continue
+            if source_sha256 is not None and address.get('sha256') != source_sha256:
+                continue
+            try:
+                ref = exact_reference(entry['native_reference'])
+                if ref['realm'] != realm['id'] or entry.get('realm_id') != realm['id']:
+                    continue
+                row = self._reference(ref, records)
+                self._query_readable(row, records, policy, scopes)
+                index = entry['asset_index']
+                if type(index) is not int or index < 0 or row['metadata']['kind'] != 'source':
+                    continue
+                asset = row['metadata']['source']['assets'][index]
+                if asset['sha256'] != address.get('sha256') or asset['path'] != entry['asset_path']:
+                    continue
+                original = snapshot if row['snapshot_revision'] == snapshot['revision'] else self.store.snapshot(row['snapshot_revision'])
+                if digest(original['files'][asset['path']]) != asset['sha256']:
+                    continue
+                candidate = {'reference': ref, 'asset_index': index, 'asset': asset,
+                             'origin': address, 'selector': selector, 'title': row['metadata']['title']}
+                candidates[(ref['id'], ref['digest'], index)] = candidate
+            except (PermissionError, ValueError, KeyError, IndexError):
+                continue
+        result['candidates'] = list(candidates.values())
+        result['object_state'] = 'found' if len(candidates) == 1 else 'ambiguous' if candidates else 'unavailable'
+        result['incomplete'] = result['object_state'] != 'found'
+        return result
+
+    def accept_records(self, scopes, references, *, expected_snapshot, idempotency_key):
+        """Accept exact bytes at an explicit base; retries use the ordinary write journal."""
+        from .workspace import exact_reference
+        if not isinstance(references, list) or not 1 <= len(references) <= 32:
+            raise ValueError('acceptance requires 1 to 32 exact references')
+        refs = [exact_reference(ref) for ref in references]
+        if len({ref['id'] for ref in refs}) != len(refs):
+            raise ValueError('duplicate acceptance references')
+        _, realm, policy, _ = self._query_view(scopes)
+        base = self.store.snapshot(expected_snapshot)
+        base_records = self._load(base, historical=True)[-1]
+        for ref in refs:
+            row = base_records.get(ref['id'])
+            if ref['realm'] != realm['id'] or row is None or self._query_reference(realm['id'], row) != ref:
+                raise ValueError('acceptance bytes differ from the explicit base')
+            self._query_readable(row, base_records, policy, scopes)
+            self._authorized(policy, 'accept', row['metadata']['scope'])
+        try:
+            return self.apply(self.propose({}, base=expected_snapshot),
+                              idempotency_key=idempotency_key, accept=[ref['id'] for ref in refs])
+        except ValueError as exc:
+            # The ordinary journal gets the first chance to resolve an exact
+            # replay. An unresolvable old-base request is a conflict even when
+            # candidate validation notices a newer revision before store CAS.
+            from ekk.model import Conflict
+            if not isinstance(exc, Conflict) and self.store.snapshot()['revision'] != expected_snapshot:
+                raise Conflict('acceptance snapshot changed; read current context') from exc
+            raise
 
     def doctor(self, revision=None):
         snapshot = self.store.snapshot(revision)
@@ -324,6 +619,71 @@ class RealmService:
         root='records' if 'records' in roots['record_roots'] else roots['record_roots'][0]
         return self.propose({path:data,f"{root}/{m['id']}.md":self.codec.encode(m)})
 
+    def retain(self, artifacts, *, title, body, scope, repository_evidence=None):
+        """Prepare exact sources and one discoverable, unaccepted result together."""
+        if not isinstance(artifacts, list) or len(artifacts) > 32:
+            raise ValueError('retain accepts at most 32 source artifacts')
+        if not isinstance(title, str) or not title or not isinstance(body, str) or not body.strip():
+            raise ValueError('retain requires a title and a nonempty result body')
+        realm = self.codec.load_yaml(self.store.snapshot()['files'][CONTROL[0]])
+        roots = self._roots(realm)['record_roots']
+        changes = {}; references = []
+        for artifact in artifacts:
+            if not isinstance(artifact, dict) or set(artifact) - {'data', 'filename', 'title'}:
+                raise ValueError('artifact requires exact data, filename and optional title')
+            proposal = self.capture(artifact['data'], title=artifact.get('title', artifact['filename']),
+                                    scope=scope, filename=artifact['filename'])
+            for path, encoded in proposal['changes'].items():
+                raw = base64.b64decode(encoded, validate=True)
+                changes[path] = raw
+                if path.endswith('.md') and any(path.startswith(root + '/') for root in roots):
+                    try: metadata = self.codec.decode(raw)['metadata']
+                    except ValueError: continue
+                    if metadata.get('kind') == 'source':
+                        references.append({'id': metadata['id'], 'revision': metadata['revision'],
+                                           'digest': 'sha256:' + digest(raw)})
+        root = 'records' if 'records' in roots else roots[0]
+        metadata = self._meta('outcome', title, scope, basis=references,
+                              retention={'schema': 'ekk.retained-result/0.1',
+                                         'claim_source': 'recorded_assertion'})
+        if repository_evidence is not None:
+            if not isinstance(repository_evidence, dict):
+                raise ValueError('repository evidence must be a recorded declaration')
+            metadata['repository_evidence'] = repository_evidence
+        changes[f"{root}/{metadata['id']}.md"] = self.codec.encode(metadata, body)
+        return self.propose(changes)
+
+    def verify_retention(self, scopes, proposal, receipt):
+        """Read a publication back under current access; verify sources as bytes.
+
+        This is a storage check, not acceptance or a test of the result's truth.
+        The adapter keeps the publication receipt even if this check is unavailable.
+        """
+        snapshot, realm, policy, current = self._query_view(scopes)
+        published = self.store.snapshot(receipt['revision'])
+        records = self._load(published, historical=True)[-1]
+        references = []; result_reference = None
+        changes = {path: base64.b64decode(raw, validate=True)
+                   for path, raw in proposal['changes'].items() if raw is not None}
+        for row in records.values():
+            if row['path'] not in changes:
+                continue
+            self._query_readable(row, records, policy, scopes)
+            raw = published['files'][row['path']]
+            if raw != changes[row['path']]:
+                raise ValueError('published record differs from the retained request')
+            ref = self._query_reference(realm['id'], row)
+            if row['metadata']['kind'] == 'source':
+                for asset in row['metadata'].get('source', {}).get('assets', []):
+                    data = published['files'][asset['path']]
+                    if data != changes.get(asset['path']) or digest(data) != asset['sha256']:
+                        raise ValueError('published source differs from the retained bytes')
+                references.append(ref)
+            elif row['metadata'].get('retention', {}).get('schema') == 'ekk.retained-result/0.1':
+                result_reference = ref
+        return {'source_references': references, 'result_reference': result_reference,
+                'read_back': True, 'snapshot': receipt['revision']}
+
     def _read_basis(self, metadata, records, policy):
         seen=set()
         def basis_links(m):
@@ -376,6 +736,8 @@ class RealmService:
         if can_lookup:
             replay=self.store.lookup(replay_changes,base=proposal['base'],idempotency_key=idempotency_key,principal=self.principal,policy_digest=digest(base['files'][CONTROL[1]]))
             if replay is not None:return replay
+            if current['revision'] != proposal['base']:
+                raise Conflict('Base snapshot is stale; no exact publication was found')
         current_accepted=self._acceptances(current,old)
         for key in current_accepted:
             before=old[key]
@@ -427,7 +789,7 @@ class RealmService:
                 validate_reference(ref,pinned=True)
                 target=self._reference(ref,records)
                 if target['metadata']['id'] not in accepted or target['digest']!=records[target['metadata']['id']]['digest'] or set(target['metadata']['scope']) != set(m['scope']): raise ValueError('replacement needs accepted target in same scopes')
-            receipt={'schema':'ekk.receipt/0.1','id':new_id(),'record_id':key,'record_revision':m['revision'],'record_sha256':r['digest'],'adopted_at':self._now(),'actor':self.principal,'governance_sha256':digest(current['files'][CONTROL[1]]),'policy_version':policy.get('version',1),'authority_basis':'trusted-local-policy-grant','base':current['revision'],'supersedes':self._links(m,'supersedes')}
+            receipt={'schema':'ekk.receipt/0.1','id':new_id(),'record_id':key,'record_revision':m['revision'],'record_sha256':r['digest'],'adopted_at':self._now(),'actor':self.principal,'governance_sha256':digest(current['files'][CONTROL[1]]),'policy_version':policy.get('version',1),'authority_basis':'trusted-local-policy-grant','base':current['revision'],'supersedes':self._receipt_supersedes(m)}
             receipt_path=f'{self._roots(realm)["receipts_root"]}/{digest(key.encode())}-{r["digest"]}.json'
             previous=current['files'].get(receipt_path)
             if previous and json.loads(previous).get('base') == proposal['base'] and json.loads(previous).get('actor') == self.principal:
@@ -479,7 +841,16 @@ class RealmService:
         if CONTROL[1] in changes and new_policy.get('version',1)!=policy.get('version',1)+1: raise ValueError('governance requires next version')
         return self.store.apply(changes,base=base,idempotency_key=idempotency_key,principal=self.principal,policy_digest=digest(current['files'][CONTROL[1]]))
 
-    def context(self, scopes, task='', budget=16000, *, focus=()):
+    def publication_revision(self):
+        """Current publication token, without exposing storage representation."""
+        return self.store.snapshot()['revision']
+
+    def context(self, scopes, task='', budget=16000, *, focus=(), selection='discovery'):
+        if selection not in ('discovery', 'action_requirements'):
+            raise ValueError('Unknown context selection')
+        action_requirements = selection == 'action_requirements'
+        if action_requirements and task:
+            raise ValueError('Action context uses explicit grounds, not discovery text')
         if type(budget) is not int or budget<1:raise ValueError('budget must be a positive integer number of bytes')
         snapshot = self.store.snapshot()
         realm,policy,packs,records = self._validate(snapshot)
@@ -497,9 +868,7 @@ class RealmService:
         access_unknowns=['unverified acceptance receipt present; no governing authority inferred'] if receipt_unknowns else []
         def readable(r):
             try:
-                self._authorized(policy,'read',r['metadata']['scope'])
-                for ref in self._refs(r['metadata']):
-                    self._authorized(policy,'read',self._reference(ref,records)['metadata']['scope'])
+                self._query_readable(r, records, policy, scopes)
                 return True
             except PermissionError:
                 return False
@@ -528,14 +897,41 @@ class RealmService:
                 declared.add(key)
                 if key not in governing or target['digest']!=records[key]['digest']: declaration_unknowns.append('declared context basis is not a current accepted commitment')
         mandatory = sorted(declared | {k for k in governing if records[k]['metadata'].get('mandatory') or records[k]['metadata']['kind']=='policy'})
-        tokens = set(re.findall(r'\w+',task.lower()))
+        if action_requirements:
+            # Every applicable governing commitment matters to an assessment,
+            # including decisions that are optional in ordinary reading context.
+            mandatory = sorted(set(mandatory) | governing)
+        tokens = set(re.findall(r'\w+',task.casefold()))
+        source_search_omitted = set()
+        source_scan_limit = CONTEXT_SOURCE_SCAN_BYTES
+        source_scan_bytes = 0
         def score(k):
+            nonlocal source_scan_bytes
             r=eligible[k]
-            return len(tokens & set(re.findall(r'\w+',(r['metadata']['title']+' '+r['body']).lower())))
-        ranked = sorted((k for k in eligible if k not in mandatory and (k in governing or not task or score(k))),key=lambda k:(-score(k),k))
+            sections = [r['metadata']['id'], r['metadata']['title'],
+                        *r['metadata'].get('aliases', []), r['body']]
+            for asset in r['metadata'].get('source', {}).get('assets', []):
+                if PurePosixPath(asset['path']).suffix.lower() not in {'.md','.txt','.csv','.tsv','.json','.yaml','.yml','.html','.xml'}:
+                    source_search_omitted.add(asset['path']); continue
+                raw = snapshot['files'][asset['path']]
+                take = min(1048576, source_scan_limit - source_scan_bytes)
+                if len(raw) > take: source_search_omitted.add(asset['path'])
+                if take == 0: continue
+                chunk = raw[:take]
+                source_scan_bytes += len(chunk)
+                try: sections.append(chunk.decode('utf-8'))
+                except UnicodeDecodeError: source_search_omitted.add(asset['path'])
+            return len(tokens & set(re.findall(r'\w+', ' '.join(sections).casefold())))
+        scores = {key: score(key) for key in eligible} if task else {}
+        def relevance(key): return scores.get(key, 0)
+        ranked = sorted((k for k in eligible if k not in mandatory and (k in governing or not task or relevance(k))),key=lambda k:(-relevance(k),k))
+        if action_requirements:
+            ranked = []
         selected={}; unknowns=list(declaration_unknowns); used=0; blocked=False; omitted=[]
-        def closure(key, bundle, override=None):
-            r=override or records[key]
+        reading_unknowns = set()
+        def closure(key, bundle, override=None, candidates=None, historical_focus=False):
+            candidates = records if candidates is None else candidates
+            r=override or candidates[key]
             marker=key if key in records and r['digest']==records[key]['digest'] else key+'@'+r['digest']
             if marker in bundle or marker in selected: return
             if not (set(r['metadata']['scope']) & set(scopes)) or not readable(r):
@@ -544,26 +940,39 @@ class RealmService:
             if self._external_refs(r['metadata']):unknowns.append('external reference unverified; no cross-realm lookup performed')
             if r['metadata']['kind']=='source' and r['metadata'].get('source',{}).get('uri') and not r['metadata']['source'].get('revision'):unknowns.append('external source version unknown')
             bundle[marker]=r
+            historic = r.get('snapshot_revision')
+            if historic and candidates and historic != next(iter(candidates.values())).get('snapshot_revision'):
+                candidates = self._load(self.store.snapshot(historic), historical=True)[-1]
             for ref in self._refs(r['metadata']):
-                dependency=self._reference(ref,records)
+                if historical_focus and (not isinstance(ref, dict) or not any(ref.get(field) for field in ('revision','digest','snapshot'))):
+                    reading_unknowns.add('selected historical material has an unpinned dependency; its version at initial publication is not identified')
+                dependency=self._reference(ref,candidates)
                 depkey=dependency['metadata']['id']
                 if not (set(dependency['metadata']['scope']) & set(scopes)) or not readable(dependency):
                     unknowns.append('required dependency outside requested or authorized projection')
                     continue
                 # Pinned historical bytes, never silently substitute the latest body.
-                if depkey not in records or dependency['digest'] != records[depkey]['digest']:
-                    closure(depkey,bundle,dependency)
-                else: closure(depkey,bundle)
+                closure(depkey,bundle,dependency,candidates,historical_focus)
         required={}
         for key in mandatory: closure(key,required)
         for ref in forced:
             target = self._reference(ref, records)
             if not set(target['metadata']['scope']) & set(scopes) or not readable(target):
                 raise PermissionError('focus outside requested or authorized projection')
-            closure(ref['id'], required, target)
+            closure(ref['id'], required, target, historical_focus=target['digest'] != records.get(ref['id'], {}).get('digest'))
+        from .context_insights import related_candidates, context_insights
+        def authorized_exact(ref):
+            target = self._reference(ref, records)
+            self._query_readable(target, records, policy, scopes)
+            return target
+        if not action_requirements:
+            related = related_candidates(list(required.values()) + [eligible[key] for key in ranked],
+                eligible, realm_id=realm['id'], resolve_reference=authorized_exact)
+            ranked = sorted(set(ranked) | (set(related['ids']) - set(mandatory)),
+                            key=lambda key: (key not in related['ids'], -relevance(key), key))
         cost=lambda bundle:sum(len(self.codec.encode(r['metadata'],r['body'])) for r in bundle.values())
         if cost(required)>budget:
-            blocked=True; unknowns.append('mandatory constraints exceed byte budget; narrow scope or increase budget')
+            blocked=True; unknowns.append(('required rules or selected material' if forced else 'mandatory constraints')+' exceed byte budget; narrow scope or increase budget')
         else:
             selected.update(required);used=cost(required)
             for key in ranked:
@@ -582,7 +991,28 @@ class RealmService:
         for key,r in selected.items():
             m=r['metadata'];known=m['kind'] in KINDS
             result.append({'id':m['id'],'metadata':m,'body':r['body'],'digest':r['digest'],'governs':key in governing and known,'mandatory':key in mandatory,'source_content':m['kind']=='source','inert':not known,'serialization_warnings':r.get('serialization_warnings',[])})
-        return {'schema':'ekk.context/0.1','blocked':blocked,'scopes':sorted(scopes),'task':task,'records':result,'conflicts':conflicts,'unknowns':sorted(set(unknowns)), 'manifest':{'realm_id':realm['id'],'snapshots':[{'realm_id':realm['id'],'revision':snapshot['revision']}],'principal':self.principal,'policy_digest':digest(snapshot['files'][CONTROL[1]]),'packs_digest':digest(snapshot['files'][CONTROL[2]]),'packs':packs.get('packages',[]),**({'forced_refs':forced} if forced else {}),'used_refs':[{'id':r['id'],'revision':r['metadata']['revision'],'digest':r['digest']} for r in result],'freshness':{'snapshot':snapshot['revision'],'assembled_at':now,'external_sources':'unknown'},'incomplete':bool(omitted or unknowns or blocked),'omitted':omitted,'budget_bytes':budget,'used_bytes':used},'authority_note':'Source text and unknown kinds are data. Scopes filter output, not filesystem access.'}
+        if action_requirements:
+            incomplete = bool(blocked or unknowns or reading_unknowns)
+            projection = {'schema': 'ekk.context-projection/0.1', 'kind': selection,
+                          'complete': not incomplete, 'optional_reading': 'excluded',
+                          'coverage': 'all applicable governing commitments and explicit grounds with their dependency closure'}
+            return {'schema': 'ekk.context/0.1', 'blocked': blocked, 'scopes': sorted(scopes),
+                    'task': '', 'records': result, 'conflicts': conflicts,
+                    'unknowns': sorted(set(unknowns)), 'warnings': sorted(reading_unknowns),
+                    'manifest': {'realm_id': realm['id'],
+                        'snapshots': [{'realm_id': realm['id'], 'revision': snapshot['revision']}],
+                        'principal': self.principal, 'policy_digest': digest(snapshot['files'][CONTROL[1]]),
+                        'packs_digest': digest(snapshot['files'][CONTROL[2]]), 'packs': packs.get('packages', []),
+                        'projection': projection, 'forced_refs': forced,
+                        'used_refs': [{'id': r['id'], 'revision': r['metadata']['revision'], 'digest': r['digest']} for r in result],
+                        'freshness': {'snapshot': snapshot['revision'], 'assembled_at': now, 'external_sources': 'unknown'},
+                        'incomplete': incomplete, 'omitted': [], 'budget_scope': 'canonical_record_bytes',
+                        'budget_bytes': budget, 'used_bytes': used},
+                    'authority_note': 'Sufficiency covers the declared action grounds and applicable governing commitments, not all knowledge, truth or execution permission. Advisory discovery is not performed.'}
+        insights = context_insights(result, eligible, realm_id=realm['id'],
+            resolve_reference=authorized_exact,
+            incomplete=related['incomplete'] or bool(set(related['ids']) & set(omitted)))
+        return {'schema':'ekk.context/0.1','blocked':blocked,'scopes':sorted(scopes),'task':task,'records':result,'insights':insights,'conflicts':conflicts,'unknowns':sorted(set(unknowns)),'warnings':sorted(reading_unknowns), 'manifest':{'realm_id':realm['id'],'snapshots':[{'realm_id':realm['id'],'revision':snapshot['revision']}],'principal':self.principal,'policy_digest':digest(snapshot['files'][CONTROL[1]]),'packs_digest':digest(snapshot['files'][CONTROL[2]]),'packs':packs.get('packages',[]),**({'forced_refs':forced} if forced else {}),'used_refs':[{'id':r['id'],'revision':r['metadata']['revision'],'digest':r['digest']} for r in result],'freshness':{'snapshot':snapshot['revision'],'assembled_at':now,'external_sources':'unknown'},'source_search':{'encoding':'UTF-8','max_bytes_per_asset':1048576,'scan_budget_bytes':source_scan_limit,'scanned_bytes':source_scan_bytes,'omitted_or_partial_assets':len(source_search_omitted)},'incomplete':bool(omitted or unknowns or reading_unknowns or blocked or insights['incomplete'] or source_search_omitted),'omitted':omitted,'budget_scope':'canonical_record_bytes','budget_bytes':budget,'used_bytes':used,'insights_budget_bytes':insights['byte_budget']},'authority_note':'All statements are fallible recorded content. Acceptance is local authority, not truth or execution permission. Scopes filter output, not filesystem access.'}
 
     def review(self, scopes):
         snapshot=self.store.snapshot();_,policy,_,records=self._validate(snapshot)

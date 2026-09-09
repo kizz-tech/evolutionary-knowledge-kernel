@@ -11,9 +11,21 @@ The research focus is whether useful ways of working can **persist, transfer and
 be revised or retired**. More stored text is not itself an improvement. An
 accepted record is not an execution permit or proof that a person understands it.
 
-This English research preview is version **0.5.0**. Read the
-[release notes](docs/release-notes-0.5.md) for compatibility changes and
-[translation provenance](docs/runtime-starter-provenance.md) for preserved originals.
+The evolving [concept](docs/concept.md) connects that experience to the next
+action: distinguish the world, observations, working beliefs and commitments;
+identify decision-relevant unknowns; and observe outcomes separately from command
+success. The [Belief Runtime contract](docs/belief-runtime.md) defines a temporary
+working projection and its boundary with host-owned sensors and capabilities.
+A bounded Python projection and the [manual coding workflow](docs/coding-readiness.md)
+implement the first slice. `ekk assess` observes the selected Git commit and
+configured reports through the ordinary bound CLI route. Automatic host execution
+is not included; empirical benefit remains to be established.
+
+Our [open research agenda](research/agenda.md) asks **when past work makes future
+work better**: what makes capabilities transferable, how to repair consequences
+of mistaken knowledge, and how to evaluate improvement as a system adapts. The
+[roadmap](ROADMAP.md) connects nine open questions to concrete next tasks, evidence
+gates and [ways to contribute](CONTRIBUTING.md).
 
 ## Try the complete method cycle
 
@@ -41,17 +53,18 @@ ekk enter --cwd /path/to/project --task 'Continue the investigation' --compact
 exact resume, and the CLI. [Method lifecycle](docs/methods.md) shows the public
 operations and their boundaries.
 
-## What the three parts do
+## What the parts do
 
 | Part | Responsibility | Owning state |
 | --- | --- | --- |
 | Personal entry | Start from intent, read private drafts, continue exact prior work | Explicit personal route and owner-held records |
 | Shared continuity | Preserve accepted results, commitments, grounds and continuation anchors | Project realm, Git and other owning systems |
 | Revisable methods | Evaluate, admit, use, transfer, reconsider and retire an exact method | Ordinary records and receipts; host-owned execution evidence |
+| Action readiness | Assess configured check reports for a selected Git commit | Temporary experimental projection and read-only CLI adapter; host-owned authority |
 
 The local kernel retains stable IDs, exact source bytes, versions, provenance,
 controlled writes and acceptance receipts. The record format remains **0.1**.
-Runtime **0.5.0** has one active CLI; old runtimes are explicit historical replay
+Runtime **0.7.0** has one active CLI; old runtimes are explicit historical replay
 artifacts outside the installed package. No company data is moved into personal
 storage by entry or this migration.
 
@@ -61,7 +74,32 @@ execution, credentials, permissions and publication remain with their owning
 systems. Profiles select routes within a trusted local process; they are not an
 OS sandbox.
 
+[Daily reliability](docs/daily-reliability.md) covers result retention with exact
+read-back, private diagnostics, owner backup/restore, explicit challenges and
+current repository evidence. [Release 0.7](docs/release-notes-0.7.md) includes that
+increment and the Belief Runtime preview. Human and AI statements remain fallible; acceptance and
+execution authority follow current ownership and grants.
+
 ## Evidence and research
+
+Run the installed coding workflow in a disposable Git repository:
+
+```sh
+.venv/bin/python examples/coding_readiness.py --ekk .venv/bin/ekk
+```
+
+It checks stale evidence, a changed commit, a real fixture-test failure and repair,
+and a separately observed local effect. [Coding readiness](docs/coding-readiness.md)
+describes owner-configured named actions, compact per-check diagnostics, the
+explicit disposable-checkout report producer, and exit codes. A favorable assessment is historical
+evidence, never an execution permit.
+
+Start with the [open questions](research/agenda.md),
+[selected related work](research/related-work.md), and the first proposed
+[applicability comparison](research/studies/method-applicability/README.md).
+The comparison asks whether a method can remain useful where its prerequisite
+holds and be restricted where it fails. It has no executable protocol or results
+yet; the roadmap describes what must be built and frozen first.
 
 The deterministic demonstration tests mechanisms. It does **not** establish
 productivity gains, general transfer, model improvement or human understanding.
@@ -74,7 +112,7 @@ review. Its empirical status is **designed_not_run**.
 - [Agent entry](docs/agent-entry.md) and [integration](docs/agent-integration.md)
 - [Migration and validation](docs/release-validation.md)
 - [Security boundary](SECURITY.md) and [assurance](docs/behavior-assurance.md)
-- [Historical runtime](archive/runtime-0.4/README.md) and [starter translation provenance](docs/runtime-starter-provenance.md)
+- [Historical runtime](archive/runtime-0.4/README.md) and [exact starter provenance](docs/runtime-starter-provenance.md)
 
 ## Development checks
 
@@ -88,3 +126,5 @@ review. Its empirical status is **designed_not_run**.
 Apache-2.0. The public source-export path excludes active stores, personal
 profiles, operational evidence, private supplied research and development Git
 history. Preparing an export does not publish it.
+
+Installation and existing-realm migration: [upgrade guide](docs/upgrading.md).

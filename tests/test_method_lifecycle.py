@@ -12,6 +12,33 @@ from ekk.model.methods import sha
 
 
 class MethodLifecycleTests(unittest.TestCase):
+    def test_accepted_incoming_hold_blocks_execution_until_authorized_resolution(self):
+        from unittest.mock import patch
+        _, accepted = self.admit()
+        realm_id=self.app.codec.load_yaml(self.app.store.snapshot()['files']['.ekk/realm.yaml'])['id']
+        admission = dict(accepted['admission'], realm=realm_id)
+        def record(kind, key, **extra):
+            metadata=self.app._meta(kind,key,['context:work'],**extra)
+            raw=self.app.codec.encode(metadata)
+            self.app.apply(self.app.propose({'records/'+key+'.md':raw}),idempotency_key=key,
+                           accept=[metadata['id']] if kind=='decision' else [])
+            return {'realm':realm_id,'id':metadata['id'],'revision':1,'digest':'sha256:'+sha(raw)}
+        dissent=record('claim','dissent',basis=[self.ref],
+            relations=[{'rel':'contradicts','target':admission['id'],'revision':admission['revision'],'digest':admission['digest']}])
+        self.assertTrue(self.repo.active(self.ref)['active'])
+        hold=record('decision','hold',mandatory=True,basis=[dissent],commitment={'expectation':'Pause this scope for review'},
+            relations=[{'rel':'contradicts','target':admission['id'],'revision':admission['revision'],'digest':admission['digest']}])
+        self.assertTrue(self.app.context(['context:work'])['blocked'])
+        with patch.object(self.executor,'execute',wraps=self.executor.execute) as execute:
+            with self.assertRaises(MethodUnavailable):
+                self.service.use(self.ref,request={'value':4},facts=self.facts,key='held-use')
+            execute.assert_not_called()
+        record('decision','resolved',basis=[dissent],supersedes=[hold],
+               commitment={'expectation':'Resolve the hold and preserve the dissent'})
+        self.assertFalse(self.app.context(['context:work'])['blocked'])
+        self.assertEqual(5,self.service.use(self.ref,request={'value':4},facts=self.facts,key='resumed-use')['output'])
+        self.assertEqual(dissent,self.app.fetch_record(['context:work'],dissent)['reference'])
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name).resolve()

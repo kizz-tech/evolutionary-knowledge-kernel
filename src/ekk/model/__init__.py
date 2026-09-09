@@ -166,12 +166,16 @@ def validate_envelope(metadata):
                     raise ValidationError("observation max_age_days must be a positive integer")
     if "observation" in metadata:
         observation = _mapping(metadata["observation"], "observation")
-        validate_identifier(observation.get("subject"))
-        _timestamp(observation.get("observed_at"), "observation observed_at")
-        for aspect in _array(observation.get("aspects"), "observation aspects", nonempty=True):
-            _text(aspect, "observation aspect")
-        if len(set(observation["aspects"])) != len(observation["aspects"]):
-            raise ValidationError("observation aspects must be unique")
+        # 0.1 allowed descriptive annotations (e.g. date and confidence).
+        # Either structured field opts into the complete review contract;
+        # legacy annotations remain data and cannot satisfy observation gaps.
+        if "subject" in observation or "aspects" in observation:
+            validate_identifier(observation.get("subject"))
+            _timestamp(observation.get("observed_at"), "observation observed_at")
+            for aspect in _array(observation.get("aspects"), "observation aspects", nonempty=True):
+                _text(aspect, "observation aspect")
+            if len(set(observation["aspects"])) != len(observation["aspects"]):
+                raise ValidationError("observation aspects must be unique")
     if "assurance" in metadata:
         assurance = _mapping(metadata["assurance"], "assurance")
         allowed = {

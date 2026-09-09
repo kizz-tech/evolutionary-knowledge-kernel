@@ -1,2 +1,2 @@
-"""EKK: personal entry, shared work continuity and revisable methods."""
-__version__ = '0.5.0'
+"""EKK: personal entry, shared continuity, revisable methods and action readiness."""
+__version__ = '0.7.0'

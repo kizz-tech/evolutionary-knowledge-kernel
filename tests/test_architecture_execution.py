@@ -22,11 +22,13 @@ class ArchitectureExecutionTests(unittest.TestCase):
         self.verify = self.trusted / 'verify.py'
         self.verify.write_text('from pathlib import Path\nimport sys\nsys.exit(0 if (Path(sys.argv[1])/"answer").read_text()=="ok" else 1)\n')
 
-    def adapter(self, timeout=2):
-        def command(script, cwd, *args):
+    def adapter(self, timeout=2, verifier_timeout=None):
+        def command(script, cwd, *args, stage_timeout=None):
             files = {p:digest(Path(p).read_bytes()) for p in (self.python, str(script))}
-            return RegisteredCommand((self.python, '-I', str(script), *args), str(cwd), {}, files, timeout)
-        tool = RegisteredTool('solve', '1', command(self.solve, self.candidate), command(self.verify, self.trusted, str(self.candidate)))
+            return RegisteredCommand((self.python, '-I', str(script), *args), str(cwd), {}, files,
+                                     timeout if stage_timeout is None else stage_timeout)
+        tool = RegisteredTool('solve', '1', command(self.solve, self.candidate),
+                              command(self.verify, self.trusted, str(self.candidate), stage_timeout=verifier_timeout))
         return LocalExecutionAdapter({'solve':tool}, self.root / 'data' / 'evidence', authorize=lambda tool, context:True, cache_root=self.root / 'cache')
 
     def test_real_command_result_durable_evidence_and_idempotency(self):
@@ -109,7 +111,10 @@ class ArchitectureExecutionTests(unittest.TestCase):
 
     def test_verifier_timeout_is_not_success(self):
         self.verify.write_text('import time\ntime.sleep(2)\n')
-        result = self.adapter(timeout=.05).execute('solve', {'blocked':False})
+        # Reach the verifier before exercising its short deadline; interpreter
+        # startup under host load is not the behavior this test measures.
+        result = self.adapter(verifier_timeout=.05).execute('solve', {'blocked':False})
+        self.assertEqual(result['command']['returncode'], 0)
         self.assertEqual(result['status'], 'verifier_timeout')
         self.assertTrue(result['verification']['timed_out'])
 

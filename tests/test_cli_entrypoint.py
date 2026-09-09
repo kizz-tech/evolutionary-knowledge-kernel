@@ -33,15 +33,27 @@ class EntrypointTests(unittest.TestCase):
             self.assertNotIn('project-bind', result.stdout)
         result = self.call('--version')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('0.5.0', result.stdout)
+        self.assertIn('0.7.0', result.stdout)
         self.assertIn('record format 0.1', result.stdout)
 
-    def test_unbound_entry_uses_current_result_and_does_not_create_state(self):
-        for options in [(), ('--compact',)]:
+    def test_unbound_entry_creates_only_private_diagnostics_without_knowledge_state(self):
+        for count, options in enumerate([(), ('--compact',)], 1):
             result = self.call('enter', '--cwd', self.root, *options)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)['status'], 'unbound')
-            self.assertEqual(list(self.root.iterdir()), [])
+            self.assertEqual({'data', 'data/operations', 'data/operations/.lock',
+                              'data/operations/operations.jsonl'},
+                             {path.relative_to(self.root).as_posix()
+                              for path in self.root.rglob('*')})
+            journal = self.root / 'data/operations/operations.jsonl'
+            self.assertEqual(0o700, journal.parent.stat().st_mode & 0o777)
+            self.assertEqual(0o600, journal.stat().st_mode & 0o777)
+            rows = [row for row in map(json.loads, journal.read_text().splitlines())
+                    if 'attempt_id' in row]
+            self.assertEqual(['unbound'] * count, [row['result'] for row in rows])
+            self.assertEqual(['enter'] * count, [row['operation'] for row in rows])
+            self.assertTrue(all(not row['mutated'] for row in rows))
+            self.assertNotIn(str(self.root), journal.read_text())
 
     def test_current_entry_does_not_read_unrelated_legacy_configuration(self):
         Path(self.env['EKK_CONFIG']).write_text('malformed: [')

@@ -1,9 +1,15 @@
-# Personal entry, shared continuity, revisable methods
+# Personal entry, shared continuity, revisable methods and current beliefs
 
-Runtime 0.5 implements the owner-selected direction: a person starts from an
+Runtime 0.7 continues the owner-selected direction: a person starts from an
 intention; shared work remains available to successors; useful methods can be
 preserved, transferred and reconsidered. The existing knowledge kernel is the
 foundation, not the product's main interaction.
+
+The concept now includes a fast observation/belief/action loop alongside the
+slower method-evolution loop. [Belief Runtime](belief-runtime.md) specifies this
+direction and its implementation status. The daily-reliability foundation remains;
+0.7 adds one manually invoked coding assessment without universal host execution
+or autonomous observation selection.
 
 ## Boundaries
 
@@ -33,6 +39,36 @@ callbacks; a source cannot supply a Python import, shell command, URL or token.
 The shipped adapter only prepares handoff artifacts and makes no external effect.
 Other systems remain responsible for their execution and access enforcement.
 
+The Belief Runtime belongs at the application boundary: it consumes explicitly
+authorized EKK projections, host-supplied action requirements and observations.
+It derives the epistemic status of one proposed action; it does not retrieve a
+new owner's knowledge, install a sensor, select credentials or execute a tool.
+Domain adapters own sensor interpretation, applicable preconditions and relevant
+alternatives. Storage owns historical sources, not mutable-world truth.
+
+The experimental `assess_action` application function implements this bounded
+projection without I/O or an implicit clock. The host explicitly supplies the
+requirement set, observations, current target versions, assessment time and
+candidate observation requests. Output includes reproducible historical inputs,
+declared limits and no execution authority. `ekk assess` calls it through a small
+adapter that obtains one bound context, exact Git commit identity and configured
+report bytes. The adapter derives fixed propositions and pins the observations;
+it does not execute tests or authenticate report producers. Known incomplete
+context and observed changes during collection prevent readiness. Capability
+execution remains separate; the checks below still belong to the host.
+
+Readiness is an additional requirement, never a grant. The host must retain
+current authorization and capability checks and bind consequential execution to
+the observed target/version with owning-system conditional operations where
+available. If that binding is unavailable, a recent observation alone cannot
+provide an atomicity guarantee. An action or an external change may invalidate
+the corresponding beliefs. Historical handoff projections require revalidation.
+
+The observation path and action path remain separate. An action attempt, an
+orchestrator's effect receipt, an outcome observation and an interpretation of
+that outcome cannot substitute for each other. Missing outcome evidence stays
+unknown; it does not authorize an automatic retry of a potentially mutating act.
+
 ## Lifecycle
 
 1. A significant experience may justify a method candidate. Zero new methods is
@@ -44,7 +80,7 @@ Other systems remain responsible for their execution and access enforcement.
    evaluation. This makes a method available; it does not execute it.
 4. Every use repeats current activation checks. A fresh process reconstructs
    eligibility from canonical records and host evidence rather than importing an
-   old in-memory activation permit.
+old in-memory activation permit.
 5. A source owner may export the exact current candidate and artifact under
    explicit existing export grants. The receiver pins the bundle digest and
    captures it as inert source. Origin acceptance is not imported. Receiver

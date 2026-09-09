@@ -225,6 +225,30 @@ class RealmMethodRepository:
         if not loaded['current']:
             return {'active': False, 'reason': 'method superseded; re-evaluate exact new version'}
         policy, records, governing = self._governing()
+        # An accepted hold may point *towards* an admission or another current
+        # constraint in this work scope. The client must not rely on the direction
+        # of the admission's own links, or on an ID without its pinned bytes.
+        relevant = {key for key in governing if records[key]['metadata']['kind'] in ('decision','policy')
+                    and set(records[key]['metadata']['scope']) & set(self.scopes)}
+        if any(item['id'] in records and set(records[item['id']]['metadata']['scope']) & set(self.scopes)
+               for item in self.realm._unverified_receipts):
+            return {'active': False, 'reason': 'current acceptance evidence is incomplete'}
+        for key in sorted(relevant):
+            row = records[key]
+            try: self.realm._query_readable(row, records, policy, self.scopes)
+            except PermissionError:
+                return {'active': False, 'reason': 'current commitment or grounds outside the selected projection'}
+            for conflict in self.realm._links(row['metadata'], 'conflicts'):
+                target = self.realm._reference(conflict, records)
+                target_id = target['metadata']['id']
+                if target_id in relevant and target['digest'] == records[target_id]['digest']:
+                    return {'active': False, 'reason': 'unresolved accepted conflict in the current work scope'}
+        for scope in self.scopes:
+            for basis in records[scope]['metadata'].get('context', {}).get('basis', []):
+                target = self.realm._reference(basis, records)
+                target_id = target['metadata']['id']
+                if target_id not in relevant or target['digest'] != records[target_id]['digest']:
+                    return {'active': False, 'reason': 'declared context constraint is not current accepted authority'}
         for key in sorted(governing):
             row = records[key]; metadata = row['metadata']
             declaration = metadata.get('method_admission', {})
@@ -234,9 +258,6 @@ class RealmMethodRepository:
             if not set(metadata['scope']) <= set(self.scopes):
                 continue
             self.realm._read_basis(metadata, records, policy)
-            if any(self.realm._reference(ref, records)['metadata']['id'] in governing
-                   for ref in self.realm._links(metadata, 'conflicts')):
-                return {'active': False, 'reason': 'unresolved accepted conflict'}
             for ref in self.realm._links(metadata, 'basis'):
                 if isinstance(ref, dict):
                     current = records.get(ref.get('id'))

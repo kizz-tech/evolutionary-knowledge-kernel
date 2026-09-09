@@ -8,8 +8,6 @@ import tempfile
 
 # Explicit reviewed source paths. New files require a release-scope decision.
 FILES = (
-    'translation-manifest.json',
-    'tests/test_public_english.py',
     '.gitignore',
     'CITATION.cff',
     'CONTRIBUTING.md',
@@ -17,6 +15,7 @@ FILES = (
     'LICENSE',
     'NOTICE',
     'README.md',
+    'ROADMAP.md',
     'SECURITY.md',
     'adapters/README.md',
     'archive/runtime-0.4/MANIFEST.sha256.json',
@@ -87,22 +86,35 @@ FILES = (
     'archive/runtime-0.4/tests/test_realms.py',
     'archive/runtime-0.4/tests/test_regressions.py',
     'docs/agent-entry.md',
+    'docs/historical-reading.md',
     'docs/agent-integration.md',
-    'docs/architecture.md',
+    'docs/architecture.ru.md',
     'docs/behavior-assurance.md',
+    'docs/belief-runtime.md',
+    'docs/coding-readiness.md',
+    'src/ekk/application/beliefs.py',
+    'src/ekk/application/coding_readiness.py',
+    'src/ekk/adapters/coding_assessment.py',
+    'examples/action_readiness.py',
+    'examples/coding_readiness.py',
+    'tests/test_beliefs.py',
+    'tests/test_coding_assessment.py',
+    'tests/test_action_context.py',
+    'tests/test_check_report.py',
+    'tools/check_report.py',
     'docs/concept.md',
     'docs/final-architecture.md',
-    'docs/implementation.md',
-    'docs/interfaces.md',
+    'docs/implementation.ru.md',
+    'docs/interfaces.ru.md',
     'docs/methods.md',
-    'docs/migration.md',
+    'docs/migration.ru.md',
     'docs/quickstart.md',
-    'docs/release-evidence.md',
+    'docs/release-evidence.ru.md',
     'docs/release-notes-0.4.md',
     'docs/release-notes-0.5.md',
     'docs/release-validation.md',
     'docs/runtime-architecture-coverage.md',
-    'docs/runtime-client-onboarding.md',
+    'docs/runtime-client-onboarding.ru.md',
     'docs/runtime-method-templates/base/proposal.md',
     'docs/runtime-method-templates/research/proposal.md',
     'docs/runtime-method-templates/software/proposal.md',
@@ -110,7 +122,7 @@ FILES = (
     'docs/using.md',
     'examples/method_transfer.py',
     'examples/quickstart.py',
-    'examples/starter/ekk-blueprint/ARCHITECTURE.md',
+    'examples/starter/ekk-blueprint/ARCHITECTURE.ru.md',
     'examples/starter/ekk-blueprint/MANIFEST.sha256.json',
     'examples/starter/ekk-blueprint/README.md',
     'examples/starter/ekk-blueprint/VALIDATION.md',
@@ -123,11 +135,11 @@ FILES = (
     'examples/starter/ekk-blueprint/ekk/README.md',
     'examples/starter/ekk-blueprint/ekk/SECURITY.md',
     'examples/starter/ekk-blueprint/ekk/adapters/README.md',
-    'examples/starter/ekk-blueprint/ekk/docs/architecture.md',
-    'examples/starter/ekk-blueprint/ekk/docs/implementation.md',
-    'examples/starter/ekk-blueprint/ekk/docs/interfaces.md',
-    'examples/starter/ekk-blueprint/ekk/docs/migration.md',
-    'examples/starter/ekk-blueprint/ekk/docs/release-evidence.md',
+    'examples/starter/ekk-blueprint/ekk/docs/architecture.ru.md',
+    'examples/starter/ekk-blueprint/ekk/docs/implementation.ru.md',
+    'examples/starter/ekk-blueprint/ekk/docs/interfaces.ru.md',
+    'examples/starter/ekk-blueprint/ekk/docs/migration.ru.md',
+    'examples/starter/ekk-blueprint/ekk/docs/release-evidence.ru.md',
     'examples/starter/ekk-blueprint/ekk/knowledge/.ekk/governance.yaml',
     'examples/starter/ekk-blueprint/ekk/knowledge/.ekk/packs.lock.yaml',
     'examples/starter/ekk-blueprint/ekk/knowledge/.ekk/realm.yaml',
@@ -194,6 +206,11 @@ FILES = (
     'pyproject.toml',
     'requirements.lock',
     'research/README.md',
+    'research/agenda.md',
+    'research/agenda-provenance.json',
+    'research/related-work.md',
+    'research/studies/method-applicability/README.md',
+    'research/studies/action-readiness/README.md',
     'research/metrics-v0.3.md',
     'research/protocol-v0.1.md',
     'research/replay.py',
@@ -220,6 +237,7 @@ FILES = (
     'src/ekk/adapters/contained_store.py',
     'src/ekk/adapters/context_display.py',
     'src/ekk/adapters/execution.py',
+    'src/ekk/adapters/file_lock.py',
     'src/ekk/adapters/git_store.py',
     'src/ekk/adapters/local_profile.py',
     'src/ekk/adapters/markdown.py',
@@ -234,6 +252,7 @@ FILES = (
     'src/ekk/application/methods.py',
     'src/ekk/application/service.py',
     'src/ekk/application/workspace.py',
+    'src/ekk/application/historical_address.py',
     'src/ekk/assets.py',
     'src/ekk/capabilities.py',
     'src/ekk/cli.py',
@@ -252,16 +271,94 @@ FILES = (
     'tests/test_architecture_store.py',
     'tests/test_capabilities.py',
     'tests/test_cli_entrypoint.py',
+    'tests/test_pack_provider.py',
+    'docs/upgrading.md',
     'tests/test_contained_store.py',
     'tests/test_context_display.py',
     'tests/test_experiments.py',
     'tests/test_markdown_cache.py',
+    'tests/test_lock_contention.py',
+    'tests/test_recovery_history.py',
     'tests/test_method_cli.py',
     'tests/test_method_lifecycle.py',
     'tests/test_method_transfer.py',
     'tests/test_reference_export.py',
+    'tests/test_observation_compatibility.py',
+    'tests/test_prepare_release.py',
+    'tools/prepare_release.py',
+    'docs/releasing.md',
+    'docs/daily-reliability.md',
+    'docs/record-queries.md',
+    'docs/release-notes-0.6.md',
+    'docs/release-notes-0.7.md',
+    'src/ekk/adapters/backup.py',
+    'src/ekk/adapters/operation_diagnostics.py',
+    'src/ekk/adapters/operation_journal.py',
+    'src/ekk/adapters/repository_evidence.py',
+    'src/ekk/adapters/retention.py',
+    'src/ekk/application/context_insights.py',
+    'tests/test_backup.py',
+    'tests/test_backup_cli.py',
+    'tests/test_context_continuity.py',
+    'tests/test_context_insights.py',
+    'tests/test_operation_diagnostics.py',
+    'tests/test_operation_journal.py',
+    'tests/test_record_queries.py',
+    'tests/test_repository_evidence.py',
+    'tests/test_retention.py',
     'tests/test_workspace_entry.py',
+    'tests/test_historical_address.py',
 )
+
+
+# Review exclusions here, never in a runtime-discovered release list.
+# Each omitted test needs a concrete reason; an empty map means full coverage.
+REVIEWED_TEST_EXCLUSIONS = {}
+EDITION_FILE = 'release-edition.json'
+EDITION_EXTRAS = ('translation-manifest.json', 'tests/test_public_english.py')
+
+
+def inventory(repository):
+    """Return reviewed paths, optionally using the explicit English edition data."""
+    repository = Path(repository)
+    declaration = repository / EDITION_FILE
+    if not declaration.exists() and not declaration.is_symlink():
+        return tuple(FILES)
+    edition = json.loads(_source(repository, EDITION_FILE))
+    if (set(edition) != {'schema', 'language', 'path_mappings', 'extra_files'}
+            or edition['schema'] != 'ekk.release-edition/1'
+            or edition['language'] != 'en'):
+        raise ValueError('Unsupported release edition declaration')
+    mappings = edition['path_mappings']
+    if not isinstance(mappings, dict) or any(
+            name not in FILES or '.ru.md' not in name
+            or target != name.replace('.ru.md', '.md')
+            for name, target in mappings.items()):
+        raise ValueError('Unreviewed edition path mapping')
+    extras = edition['extra_files']
+    if (not isinstance(extras, list) or len(set(extras)) != len(extras)
+            or any(name not in EDITION_EXTRAS for name in extras)):
+        raise ValueError('Unreviewed edition extra')
+    paths = tuple(mappings.get(name, name) for name in FILES) + tuple(extras) + (EDITION_FILE,)
+    if len(set(paths)) != len(paths):
+        raise ValueError('Colliding edition paths')
+    return paths
+
+
+def review_test_coverage(repository, paths):
+    """Discovery is a review gate, never an addition to the public allowlist."""
+    discovered = {p.relative_to(repository).as_posix()
+                  for p in (repository / 'tests').rglob('test_*.py')}
+    invalid = {name for name, reason in REVIEWED_TEST_EXCLUSIONS.items()
+               if not isinstance(reason, str) or not reason.strip()
+               or not name.startswith('tests/') or not Path(name).match('test_*.py')}
+    overlap = set(paths) & set(REVIEWED_TEST_EXCLUSIONS)
+    missing = discovered - set(paths) - set(REVIEWED_TEST_EXCLUSIONS)
+    if invalid or overlap or missing:
+        raise ValueError('Unreviewed export test coverage: ' +
+                         ', '.join(sorted(invalid | overlap | missing)))
+    return {name: REVIEWED_TEST_EXCLUSIONS[name]
+            for name in sorted(discovered & set(REVIEWED_TEST_EXCLUSIONS))}
 
 
 def _source(repository, relative):
@@ -285,11 +382,13 @@ def prepare(repository, destination):
     destination = requested.resolve()
     if destination.exists() or destination.is_relative_to(repository):
         raise ValueError('Use a new export location outside the repository')
+    paths = inventory(repository)
+    exclusions = review_test_coverage(repository, paths)
     destination.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix='.ekk-export-', dir=destination.parent))
     try:
         manifest = {}
-        for relative in FILES:
+        for relative in paths:
             data = _source(repository, relative)
             target = staging / relative
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -297,7 +396,7 @@ def prepare(repository, destination):
             manifest[relative] = hashlib.sha256(data).hexdigest()
         receipt = {'schema': 'ekk.reference-export/2', 'state': 'prepared_for_review',
                    'published': False, 'license_selected': True, 'license': 'Apache-2.0',
-                   'files': manifest,
+                   'files': manifest, 'reviewed_test_exclusions': exclusions,
                    'data': 'Explicit source and synthetic starter fixtures only; no active knowledge store, local config, Git history, or runtime state.'}
         (staging / 'export-manifest.json').write_text(
             json.dumps(receipt, indent=2, sort_keys=True) + '\n', encoding='utf-8')

@@ -1,0 +1,22 @@
+{
+  "extra_files": [
+    "translation-manifest.json",
+    "tests/test_public_english.py"
+  ],
+  "language": "en",
+  "path_mappings": {
+    "docs/architecture.ru.md": "docs/architecture.md",
+    "docs/implementation.ru.md": "docs/implementation.md",
+    "docs/interfaces.ru.md": "docs/interfaces.md",
+    "docs/migration.ru.md": "docs/migration.md",
+    "docs/release-evidence.ru.md": "docs/release-evidence.md",
+    "docs/runtime-client-onboarding.ru.md": "docs/runtime-client-onboarding.md",
+    "examples/starter/ekk-blueprint/ARCHITECTURE.ru.md": "examples/starter/ekk-blueprint/ARCHITECTURE.md",
+    "examples/starter/ekk-blueprint/ekk/docs/architecture.ru.md": "examples/starter/ekk-blueprint/ekk/docs/architecture.md",
+    "examples/starter/ekk-blueprint/ekk/docs/implementation.ru.md": "examples/starter/ekk-blueprint/ekk/docs/implementation.md",
+    "examples/starter/ekk-blueprint/ekk/docs/interfaces.ru.md": "examples/starter/ekk-blueprint/ekk/docs/interfaces.md",
+    "examples/starter/ekk-blueprint/ekk/docs/migration.ru.md": "examples/starter/ekk-blueprint/ekk/docs/migration.md",
+    "examples/starter/ekk-blueprint/ekk/docs/release-evidence.ru.md": "examples/starter/ekk-blueprint/ekk/docs/release-evidence.md"
+  },
+  "schema": "ekk.release-edition/1"
+}
