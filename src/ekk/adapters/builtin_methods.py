@@ -48,8 +48,9 @@ CASES = {
 
 
 def registry():
+    from .practical_methods import registry as practical
     return {'builtin:handoff': MethodAdapter('builtin:handoff', '1', 'handoff-fixtures/1', (),
-             lambda artifact: artifact in (EXCERPT, REFERENCE), handoff, CASES, _evaluate)}
+             lambda artifact: artifact in (EXCERPT, REFERENCE), handoff, CASES, _evaluate), **practical()}
 
 
 def spec(artifact):

@@ -2,6 +2,13 @@
 
 **A personal way into work, shared continuity, and methods that can improve with experience.**
 
+The 0.8 workflow adds proportionate entry, discoverable intentions, versioned
+continuation, a durable publication queue, read-only author notes and explicit
+local follow-ups. Start with [continuous work](docs/continuous-work.md). A local
+edit with sufficient context needs no EKK call and no new record. Practical
+software, research and personal-work guidance is optional; usefulness is assessed
+through ordinary work, feedback and selected logs.
+
 Start from an intention: investigate a question, continue a change, or prepare a
 handoff. EKK returns authorized context, accepted commitments, results, questions
 and exact continuation references. Personal drafts stay with their owner; shared

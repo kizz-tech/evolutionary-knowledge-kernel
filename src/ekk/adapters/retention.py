@@ -103,6 +103,7 @@ def _once(app, *, operation, fingerprint, build, scopes, key, expected_snapshot=
         acquire_lock(lock, kind='retention_request')
         if path.is_symlink():
             raise PermissionError('Retention request must not be a symlink')
+        newly_prepared = not path.exists()
         if path.exists():
             row = json.loads(path.read_text())
             if row['request_digest'] != request_digest:
@@ -126,7 +127,11 @@ def _once(app, *, operation, fingerprint, build, scopes, key, expected_snapshot=
             # Recheck current access even for a previously completed publication.
             _, _, current_policy, _ = app._query_view(scopes)
             app._authorized(current_policy, 'write', scopes)
-            replay = _lookup(app, proposal, key)
+            # A new proposal reaches the application's exact publication lookup
+            # after its current authorization checks. Do not recover the whole
+            # history twice before that call. Existing requests keep early replay
+            # so later record changes cannot invalidate an already-published result.
+            replay = None if newly_prepared and attempt == 0 else _lookup(app, proposal, key)
             if replay is not None:
                 receipt = replay
                 break

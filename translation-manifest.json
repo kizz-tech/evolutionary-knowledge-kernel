@@ -1,6 +1,27 @@
 {
-  "edition": "0.7.0",
+  "edition": "0.8.0",
   "files": [
+    {
+      "method": "unicode_escape_identical_ast",
+      "original_path": "src/ekk/application/discovery.py",
+      "original_sha256": "f3397766dab068b2a9a89c67231122010ac352a3f9466ab6685dbf96c5c1794a",
+      "path": "src/ekk/application/discovery.py",
+      "sha256": "42e027040096362c28ec3b93e72e01c4888938d550f8fbd1e65e951d0ffa8f8f"
+    },
+    {
+      "method": "unicode_escape_identical_ast",
+      "original_path": "tests/test_continuous_work.py",
+      "original_sha256": "bf899d974e1ae3be47758b2749648470836b8afbbd64f3d9f6f03633e2aedd0b",
+      "path": "tests/test_continuous_work.py",
+      "sha256": "bf72f9a8883472f2ebd743b0198aeb15935ea0c71b8b4c5c7c90283841f390e9"
+    },
+    {
+      "method": "unicode_escape_identical_ast",
+      "original_path": "tests/test_markdown_parser_parity.py",
+      "original_sha256": "e04e700d84204fc58de7aad8cf47afaa4c97bed7673c00fe81a3975033fb4c11",
+      "path": "tests/test_markdown_parser_parity.py",
+      "sha256": "8fe9cfc6dd774e422062480c4f97e901a150eb52e1134b7e2fa5f2c60790ed62"
+    },
     {
       "method": "reused_verified_english",
       "original_path": "adapters/README.md",
@@ -98,13 +119,6 @@
       "original_sha256": "0c4fd346aee6fba35ed4e23600871fdc039e82386851b650f9796546282742b9",
       "path": "archive/runtime-0.4/src/ekk/reference_export.py",
       "sha256": "e95992270ec989025ed9256c2722ef78c0826ed3e8edcfe9273a7c60ddb888f2"
-    },
-    {
-      "method": "reused_verified_english",
-      "original_path": "docs/agent-integration.md",
-      "original_sha256": "78a2adc41f3179b9e1c3eb7d26b92d92572b02bf798e047db2fac7f41108aac1",
-      "path": "docs/agent-integration.md",
-      "sha256": "5504edddf55aeaf8c43c60ea18428a94f16a47edaee081de47b7e92aa420f9e0"
     },
     {
       "method": "reused_verified_english",

@@ -8,6 +8,23 @@ import tempfile
 
 # Explicit reviewed source paths. New files require a release-scope decision.
 FILES = (
+    'docs/plans/v0.8/spec.md',
+    'docs/plans/v0.8/implementation.md',
+    'docs/continuous-work.md',
+    'docs/release-notes-0.8.md',
+    'src/ekk/adapters/activity_cli.py',
+    'src/ekk/adapters/authored_sources.py',
+    'src/ekk/adapters/derived_cache.py',
+    'src/ekk/adapters/discovery_index.py',
+    'src/ekk/adapters/operational_store.py',
+    'src/ekk/adapters/practical_methods.py',
+    'src/ekk/adapters/work_repository.py',
+    'src/ekk/application/discovery.py',
+    'src/ekk/application/improvement.py',
+    'src/ekk/application/practices.py',
+    'src/ekk/application/work.py',
+    'tests/test_continuous_work.py',
+    'tests/test_markdown_parser_parity.py',
     '.gitignore',
     'CITATION.cff',
     'CONTRIBUTING.md',

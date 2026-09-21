@@ -34,6 +34,8 @@ def _retained_size(value):
         return total
     return size(value)
 
+# Keep the established grammar on hosts with and without LibYAML. In particular,
+# CSafeLoader accepts some plain-scalar tab forms rejected by SafeLoader.
 class _Loader(yaml.SafeLoader):
     pass
 
@@ -77,13 +79,22 @@ def _bounded_graph(value):
 
 
 class MarkdownCodec:
-    def __init__(self, schema_dir=None):
+    def __init__(self, schema_dir=None, *, cache_dir=None):
         self.schema_dir=Path(schema_dir) if schema_dir else schema_directory()
         self._validators={}
         # Disposable, instance-local parse results; never cache schema or authority.
         self._parse_cache=OrderedDict()
         self._parse_cache_bytes=0
         self._parse_cache_lock=RLock()
+        self._schema_cache=OrderedDict()
+        self._schema_cache_bytes=0
+        self._disk=None
+        if cache_dir is not None:
+            from .derived_cache import DerivedCache
+            # Changes to constructors, bounds, schemas or parser version invalidate
+            # previously derived bytes. The cache cannot load Python objects/code.
+            namespace=sha256(Path(__file__).read_bytes()+yaml.__version__.encode()).hexdigest()
+            self._disk=DerivedCache(cache_dir, namespace)
 
     def validate_schema(self, name, value):
         if name not in ('record','realm','receipt','workspace'):raise ValueError('unsupported schema name')
@@ -91,8 +102,28 @@ class MarkdownCodec:
             schema=json.loads((self.schema_dir/(name+'.schema.json')).read_text(encoding='utf-8'))
             Draft202012Validator.check_schema(schema)
             self._validators[name]=Draft202012Validator(schema,format_checker=FormatChecker())
+        def json_value(node):
+            if type(node) in (str,int,float,bool,type(None)):return True
+            if type(node) is list:return all(json_value(x) for x in node)
+            if type(node) is dict:return all(type(k) is str and json_value(v) for k,v in node.items())
+            return False
+        encoded=None
+        try:
+            if json_value(value):encoded=json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False).encode()
+        except (ValueError,RecursionError):pass
+        key=(name,sha256(encoded).digest()) if encoded is not None else None
+        if key is not None and self._schema_cache.get(key)==encoded:
+            self._schema_cache.move_to_end(key)
+            return
         error=next(self._validators[name].iter_errors(value),None)
         if error is not None:raise ValueError(f'{name} schema: {error.message}')
+        if encoded is not None and len(encoded)<=131072:
+            old=self._schema_cache.pop(key,None)
+            if old is not None:self._schema_cache_bytes-=len(old)
+            self._schema_cache[key]=encoded
+            self._schema_cache_bytes+=len(encoded)
+            while len(self._schema_cache)>8192 or self._schema_cache_bytes>16*1048576:
+                self._schema_cache_bytes-=len(self._schema_cache.popitem(last=False)[1])
 
     def load_json(self, raw):
         def pairs(items):
@@ -119,7 +150,14 @@ class MarkdownCodec:
             if cached is not None and cached[0] == raw:
                 self._parse_cache.move_to_end(key)
                 return deepcopy(cached[1])
-        result=self._parse_yaml(text,allow_aliases=allow_aliases)
+        kind='yaml-aliases' if allow_aliases else 'yaml-strict'
+        cached=self._disk.get(kind,raw) if self._disk else None
+        if cached is not None and isinstance(cached,list) and len(cached)==2 and isinstance(cached[0],dict) and type(cached[1]) is bool:
+            result=(cached[0],cached[1])
+            _bounded_graph(result[0])
+        else:
+            result=self._parse_yaml(text,allow_aliases=allow_aliases)
+            if self._disk:self._disk.put(kind,raw,result)
         size=_retained_size((key,raw,result))
         if size <= MAX_PARSE_CACHE_BYTES:
             with self._parse_cache_lock:

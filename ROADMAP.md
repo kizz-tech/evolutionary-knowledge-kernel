@@ -13,8 +13,9 @@ this file does not imply those issues, assignments or funded runs already exist.
 
 | Area | Evidence state | Remaining limit |
 | --- | --- | --- |
-| Public runtime | [0.5.0 English research prerelease](https://github.com/kizz-tech/evolutionary-knowledge-kernel/releases/tag/v0.5.0), released 2026-09-07 | Experimental implementation; supported user outcomes remain to be established |
-| Daily reliability increment | 0.6 implemented; included in the selected 0.7 candidate | Public English release validation and distribution are separate; the 0.5 installation does not acquire these features from this roadmap |
+| Public runtime | [0.7.0 English research prerelease](https://github.com/kizz-tech/evolutionary-knowledge-kernel/releases/tag/v0.7.0), released 2026-09-09 | Public publication and the owner's installed version are separate facts |
+| Continuous work | [0.8 approved specification](docs/plans/v0.8/spec.md), [implementation state](docs/plans/v0.8/implementation.md) | Connected workflow and local installation are checked separately from benefit in ordinary use |
+| Daily reliability increment | 0.6 implemented and included in 0.7 | Exact retention, diagnostics and isolated recovery remain the foundation of the 0.8 outbox |
 | Method lifecycle | Deterministic evaluation, local admission, transfer, quarantine and retirement demonstration | No empirical productivity or general transfer result |
 | Human/shared/method-transfer study | Existing protocol and contract validator; `designed_not_run`, freeze unset | Actual study design choices, execution and independent analysis are still required |
 | Method applicability | [Proposed first comparison](research/studies/method-applicability/README.md) | No dataset, executable protocol, reproduction or run yet |
@@ -29,7 +30,7 @@ from local implementation checks and evidence of user benefit.
 
 ### EKK-T-REL: Prepare and release the English 0.7 preview
 
-**State:** implementation and isolated release validation complete; public release pending. **Dependency:** none
+**State:** 0.7 public release completed on 2026-09-09. The 0.8 reviewed export and local installation follow the approved specification. **Dependency:** none
 on an empirical research win.
 
 Prepare a reviewed export against the current English edition, preserving

@@ -36,7 +36,9 @@ def service(root, *, realm_id=None, allowed_scopes=None):
         branch=subprocess.run(['git','-C',str(root.parent),'symbolic-ref','HEAD'],capture_output=True,text=True,check=True).stdout.strip()
         storage=ContainedGitStore(root,root.parent,branch,data_home()/key)
     else:storage=GitStore(root,runtime_dir=data_home()/key)
-    app=RealmService(storage,principal=trusted_principal(),codec=MarkdownCodec(),allowed_scopes=allowed_scopes,pack_loader=PackDirectory(pack_directory()))
+    from .local_profile import cache_home
+    from .discovery_index import DiscoveryIndex
+    app=RealmService(storage,principal=trusted_principal(),codec=MarkdownCodec(cache_dir=cache_home()/'parsed'/key),allowed_scopes=allowed_scopes,pack_loader=PackDirectory(pack_directory()),discovery_index=DiscoveryIndex(cache_home()/'discovery'/key))
     app.initial_realm_id=identity
     return app
 
@@ -56,6 +58,7 @@ def parser():
     p.add_argument('--resume',help='Exact JSON reference with realm, id, revision and digest on enter')
     p.add_argument('--budget',type=int,default=16000)
     p.add_argument('--compact',action='store_true',help='Compact enter/context display or assessment summary; preserves evidence identities')
+    p.add_argument('--brief',action='store_true',help='Progressive context display; required reading remains explicit')
     p.add_argument('--action',help='Owner-configured named assessment; assess only, without a JSON request')
     p.add_argument('--expected-head',help='Full Git commit for a named assessment; defaults to freshly observed HEAD')
     p.add_argument('--file',type=Path)
@@ -225,7 +228,7 @@ def _dispatch(args, request):
             result=app.search_records(scopes,query=request.get('query',args.task),
                 limit=request.get('limit',20),offset=request.get('offset',0),
                 expected_snapshot=request.get('expected_snapshot'),
-                source_byte_limit=request.get('source_byte_limit',1048576))
+                source_byte_limit=request.get('source_byte_limit',1048576),match=request.get('match','all'))
         elif op=='fetch':
             result=app.fetch_record(scopes,request['reference'],max_bytes=request.get('max_bytes',131072))
         elif op=='read-source':
@@ -424,6 +427,8 @@ def main(argv=None):
     args=parser().parse_args(argv);request={};common=False
     try:
         request=_input(args);common=_common_request(request)
+        if args.brief and (args.compact or args.operation not in {'enter','context'}):
+            raise ValueError('--brief supports enter/context and cannot be combined with --compact')
         if args.compact and (args.operation not in {'enter','context','assess'}
                 or (args.operation != 'assess' and (args.json or args.stdin))):
             raise ValueError('--compact supports enter/context command options and assess only')
@@ -433,6 +438,10 @@ def main(argv=None):
         emitted_warnings=[]
         def render(result):
             output=result_envelope(request,args.operation,result) if common else result
+            if args.brief:
+                from .context_display import brief_context
+                brief=brief_context(result)
+                output=result_envelope(request,args.operation,brief) if common else brief
             if args.compact:
                 if args.operation == 'assess':
                     from .coding_assessment import compact_assessment

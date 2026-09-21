@@ -79,6 +79,50 @@ class OperationJournalTests(unittest.TestCase):
         self.assertEqual(result['caller_profile'], 'unknown')
         self.assertEqual(report['cohort']['logical_mutations'], 0)
 
+    def test_older_writer_preserves_newer_operation_labels_across_upgrade_and_rollback(self):
+        older = operation_journal.OPERATIONS - {'assess'}
+        with patch.object(operation_journal, 'OPERATIONS', older):
+            self.journal.finish(self.journal.begin('enter'), result='completed')
+        with patch.object(operation_journal, 'OPERATIONS', older | {'assess'}):
+            self.journal.finish(self.journal.begin('assess'), result='completed')
+        newer_row = self.rows()[-1]
+        with patch.object(operation_journal, 'OPERATIONS', older):
+            self.journal.finish(self.journal.begin('retain'), result='completed')
+            with self.assertRaises(OperationJournalError):
+                self.journal.begin('assess')
+        self.clock.advance(seconds=1)
+        report = self.report()
+        self.assertEqual(report['status'], 'complete')
+        self.assertEqual(report['cohort']['attempts'], 3)
+        self.assertEqual(report['by_operation']['assess']['attempts'], 1)
+        self.assertEqual(self.rows()[1], newer_row)
+
+    def test_future_operation_label_is_read_only_and_structural_validation_stays_strict(self):
+        self.journal.finish(self.journal.begin('enter'), result='completed')
+        original = self.rows()[0]
+        future = {**original, 'operation': 'future.operation-v2'}
+        self.overwrite_rows([future])
+        self.clock.advance(seconds=1)
+        self.assertEqual(self.report()['status'], 'complete')
+        with self.assertRaises(OperationJournalError):
+            self.journal.begin('future.operation-v2')
+        for operation in ('', 'a' * 65, '../private', 'task text', 'é', 'a\n', [], 'x..y'):
+            with self.subTest(operation=operation):
+                self.overwrite_rows([{**original, 'operation': operation}])
+                raw = self.journal.path.read_bytes()
+                with self.assertRaises(JournalCorruptError):
+                    self.journal.begin('enter')
+                self.assertEqual(self.journal.path.read_bytes(), raw)
+        for updates in ({'schema': 'ekk.operation-attempt/9.0'}, {'result': 'future-result'},
+                        {'logical_id': 'invalid'}, {'unknown_required': True}):
+            with self.subTest(updates=updates):
+                self.overwrite_rows([{**future, **updates}])
+                with self.assertRaises(JournalCorruptError):
+                    self.journal.begin('enter')
+        self.overwrite_rows([future], preserve_integrity=False)
+        with self.assertRaises(JournalCorruptError):
+            self.journal.begin('enter')
+
     def test_repeat_retry_and_replay_have_explicit_separate_denominators(self):
         first = self.journal.begin('capture', realm_id='realm', principal='one', idempotency_key='key')
         self.clock.advance(seconds=1)

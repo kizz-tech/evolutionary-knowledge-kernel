@@ -87,6 +87,10 @@ def work_view(context, method_availability=None):
             'accepted_commitments': [anchor(r) for r in rows if r.get('governs')],
             'visible_questions': [anchor(r) for r in rows if r['metadata']['kind'] == 'question'],
             'visible_results': [anchor(r) for r in rows if r['metadata']['kind'] in ('outcome', 'observation')],
+            'work_items': [{**anchor(r), **{key:value for key,value in r['metadata']['work'].items()
+                if key in ('intention','direction','next_step','questions','status','domain','external')},
+                'events_read':'use work show with the exact reference'}
+                for r in rows if r['metadata'].get('work',{}).get('schema')=='ekk.work/0.1'],
             'method_offers': offers,
             'challenges': context.get('insights', {}).get('challenges', []),
             'changed_grounds': context.get('insights', {}).get('changed_grounds', []),

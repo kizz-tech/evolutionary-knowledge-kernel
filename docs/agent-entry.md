@@ -1,10 +1,16 @@
-# Agent entry for EKK 0.7
+# Agent entry for EKK 0.8
+
+Use existing local context first. A small edit with sufficient context needs no
+EKK call or retained record. For a design edit, start with the owning component,
+tokens and style guide. Enter or search only for missing context, a consequential
+decision or work that needs continuity. Reuse valid evidence until relevant inputs
+change. See [continuous work](continuous-work.md) only when that operation is needed.
 
 The person starts with an outcome. The agent resolves the actual project,
 knowledge owner and available connections:
 
 ```sh
-ekk enter --cwd /path/to/project --task 'Requested outcome' --compact
+ekk enter --cwd /path/to/project --task 'Requested outcome' --brief
 ```
 
 Read the project's owner instructions first. Its portable `.ekk/workspace.yaml`
@@ -43,6 +49,8 @@ denial; keep the bound route or correct the request within its existing scope.
 `--resume` accepts an exact JSON `realm/id/revision/digest` reference from `work_view`.
 That version and its grounds are mandatory within the record budget. A historical
 version is not silently replaced with its head or made current by being read.
+When continuing work, check for later scope corrections and completion evidence;
+a retrieved plan alone does not establish what remains to be done.
 Explicit `working_entries` can pin the same non-governing reading material in a
 workspace or personal home. Aliases remain discovery labels, not identity or
 permissions. See [historical reading](historical-reading.md) for owner-scoped old
@@ -57,7 +65,15 @@ Inside a bound project, `--personal` adds a separate personal projection. Do not
 automatically transfer private conversations, doubts or preferences into shared
 work. Switching profiles does not clear model context or isolate the OS process.
 
-Retain substantial findings and verified outcomes in their authorized owning realm.
+Retain significant new findings or useful changed state in their authorized owning
+realm and check the actual receipt. Repeated reporting and routine completion do
+not themselves require a record. The parent
+integrator includes useful delegated findings in that result. If retention remains
+unresolved, report that specific limit; if there is no new material, no record is
+needed. There is no compulsory reflection or automatic transcript capture.
+For an asynchronous durable write use `queue submit`, then inspect `queue status`;
+report local pending and published states distinctly. Use `work find` to discover
+an intention and `work show` to continue its exact version, results and limitations.
 Use `retain` for an ordinary unaccepted outcome and its exact source artifacts;
 use `capture` for one original source. Preserve supplied bytes and distinguish them
 from the agent's derivative account. A result with no new source artifacts is valid.

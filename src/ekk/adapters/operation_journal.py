@@ -55,6 +55,12 @@ OPERATIONS = frozenset({
     'method.propose', 'method.evaluate', 'method.admit', 'method.use',
     'method.reconsider', 'method.quarantine', 'method.retire',
     'method.export', 'method.receive', 'method.inspect',
+    'work.find','work.show','work.start','work.update','work.event','improve.record',
+    'queue.submit','queue.status','queue.retry','queue.drain','queue.backup','queue.restore',
+    'task.create','task.list','task.show','task.update','task.wait','task.register-wait',
+    'task.external-attempt','task.external-outcome',
+    'source.add','source.remove','source.list','source.search','source.fetch',
+    'guide.list','guide.show','guide.package',
 })
 RESULTS = frozenset({'completed', 'error', 'conflict', 'blocked', 'cancelled', 'unbound'})
 FAILURE_STAGES = frozenset({'request', 'routing', 'store', 'execution', 'response', 'unknown'})
@@ -70,6 +76,7 @@ MAX_IDENTITY_BYTES = 4096
 MAX_COUNTER = 2**63 - 1
 MAX_DURATION_MS = 10**15
 _PROFILE = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,47}\Z')
+_OPERATION = re.compile(r'[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*\Z', re.ASCII)
 _DIGEST = re.compile(r'[0-9a-f]{64}\Z')
 _VERSION = re.compile(
     r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)'
@@ -319,7 +326,11 @@ class OperationJournal:
             raise ValueError('Invalid attempt identity')
         if row['parent_attempt_id'] is not None and (not _uuid(row['parent_attempt_id']) or row['parent_attempt_id'] == row['attempt_id']):
             raise ValueError('Invalid parent identity')
-        if not isinstance(row['operation'], str) or row['operation'] not in OPERATIONS:
+        # Operation names are diagnostic labels, not executable semantics. Older
+        # readers must preserve labels emitted by newer runtimes sharing this
+        # journal. Writers remain limited to their explicit OPERATIONS registry.
+        if (not isinstance(row['operation'], str) or len(row['operation']) > 64
+                or not _OPERATION.fullmatch(row['operation'])):
             raise ValueError('Invalid operation')
         for key in ('realm_digest', 'principal_digest', 'attempted_base', 'current_snapshot', 'final_snapshot'):
             if row[key] is not None and (not isinstance(row[key], str) or not _DIGEST.fullmatch(row[key])):

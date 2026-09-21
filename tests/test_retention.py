@@ -31,6 +31,30 @@ class RetentionTests(unittest.TestCase):
         return capture_once(self.app, b'exact\r\nsource\x00\xff', title='Synthetic source',
                             scopes=['scope'], filename='original.bin', key=key, **kwargs)
 
+    def test_multi_artifact_preparation_uses_one_snapshot_and_preserves_exact_bytes(self):
+        artifacts = [{'filename': f'part-{n}.bin', 'data': b'exact\r\n\x00\xff' + bytes([n])}
+                     for n in range(5)]
+        snapshot = self.app.store.snapshot()
+        with patch.object(self.app.store, 'snapshot', side_effect=[snapshot]) as read:
+            proposal = self.app.retain(artifacts, title='Result', body='Recorded result', scope=['scope'])
+        self.assertEqual(read.call_count, 1)
+        self.assertEqual(proposal['base'], snapshot['revision'])
+        receipt = self.app.apply(proposal, idempotency_key='prepared-batch')
+        verified = self.app.verify_retention(['scope'], proposal, receipt)
+        self.assertEqual(len(verified['source_references']), 5)
+        files = self.app.store.snapshot()['files']
+        for artifact in artifacts:
+            matches = [raw for path, raw in files.items() if path.endswith('/' + artifact['filename'])]
+            self.assertEqual(matches, [artifact['data']])
+
+    def test_fresh_retention_avoids_duplicate_lookup_but_retry_keeps_early_replay(self):
+        original = self.app.store.lookup
+        with patch.object(self.app.store, 'lookup', wraps=original) as lookup:
+            receipt = self.capture()
+        self.assertEqual(lookup.call_count, 1)
+        with patch.object(self.app, 'apply', side_effect=AssertionError('Replay must precede apply')):
+            self.assertEqual(self.capture(), receipt)
+
     def test_additive_stale_base_preserves_ids_bytes_competing_write_and_key(self):
         original = self.app.apply
         attempted = []

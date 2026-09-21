@@ -20,6 +20,11 @@ one operation. The result is an ordinary unaccepted `outcome` with exact source
 basis references. Its body is a recorded assertion, not a verified account of the
 world. A result without new artifacts is also valid.
 
+Include retention in the final completion check for substantial work. The parent
+integrator retains useful delegated findings with the result and checks the actual
+receipt before claiming it was saved. Report unresolved retention explicitly;
+ordinary work with no new material requires no additional record.
+
 ```sh
 ekk retain --cwd /path/to/project --title 'Integration result' \
   --file evidence.txt --result-file result.md --idempotency-key integration-2026-09-08
@@ -167,6 +172,13 @@ time with `matches`, `changed` or `unavailable`. Missing declarations and unavai
 checks remain unknown. A matching file hash is not a semantic test of the assertion.
 
 ## Private operation diagnostics
+
+Operation names are bounded ASCII labels when reading a journal; a reader can
+preserve names introduced by a newer runtime. Each writer still emits only its
+registered operations. Unknown schemas, malformed fields and integrity failures
+remain errors. An unpatched 0.6 reader rejects later `assess` entries and cannot
+append diagnostics; use a compatible maintenance build instead of deleting those
+entries. This compatibility rule grants no knowledge or execution semantics.
 
 CLI, retention and method adapters, and the private gateway instrument their
 application attempts. Direct application calls that bypass these adapters are

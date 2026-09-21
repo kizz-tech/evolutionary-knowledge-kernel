@@ -4,6 +4,8 @@ import base64
 from datetime import datetime, timezone
 import json
 import re
+from collections import OrderedDict
+from copy import deepcopy
 from pathlib import PurePosixPath
 from ekk.model import Conflict, validate_envelope, validate_reference, digest, new_id
 
@@ -12,11 +14,14 @@ KINDS = {'context','note','source','observation','claim','question','decision','
 CONTEXT_SOURCE_SCAN_BYTES = 8 * 1048576
 
 class RealmService:
-    def __init__(self, store, principal, clock=None, *, codec, pack_loader=None, allowed_scopes=None):
+    def __init__(self, store, principal, clock=None, *, codec, pack_loader=None, allowed_scopes=None, discovery_index=None):
         if not isinstance(principal, str) or not principal:
             raise ValueError('trusted principal required')
         self.store, self.principal, self.clock, self.codec = store, principal, clock, codec
         self.pack_loader = pack_loader
+        self.discovery_index = discovery_index
+        self._loaded_views = OrderedDict()
+        self._resolved_references = OrderedDict()
         self.allowed_scopes=None if allowed_scopes is None else frozenset(allowed_scopes)
 
     def _now(self):
@@ -47,6 +52,14 @@ class RealmService:
     def _load(self, snapshot, *, historical=False):
         files = snapshot['files']
         allow_aliases=historical and snapshot['revision'] is not None and snapshot['revision']!=self.store.history()[0]
+        # Content, grammar and historical horizon all participate. Never cache
+        # grants, acceptance, pack availability or a mutable candidate by revision.
+        cache_key=(snapshot['revision'],bool(allow_aliases),tuple((p,digest(raw)) for p,raw in sorted(files.items())))
+        if cache_key in self._loaded_views:
+            cached=deepcopy(self._loaded_views[cache_key])
+            self._realm_id=cached[0]['id']
+            self._loaded_views.move_to_end(cache_key)
+            return cached
         configs = [self.codec.load_yaml(files[p],allow_aliases=allow_aliases) for p in CONTROL]
         self.codec.validate_schema('realm',configs[0])
         self._realm_id=configs[0]['id']
@@ -59,7 +72,10 @@ class RealmService:
                 m = validate_envelope(record['metadata'])
                 if m['id'] in records: raise ValueError('duplicate record ID: '+m['id'])
                 records[m['id']] = {**record,'metadata':m,'path':path,'digest':digest(raw),'snapshot_revision':snapshot['revision']}
-        return (*configs, records)
+        result=(*configs, records)
+        self._loaded_views[cache_key]=deepcopy(result)
+        while len(self._loaded_views)>4:self._loaded_views.popitem(last=False)
+        return result
 
     def _grants(self, governance):
         if 'grants' in governance:return governance['grants']
@@ -101,8 +117,11 @@ class RealmService:
         if item.get('realm') and item['realm']!=self._realm_id:raise ValueError('external reference unverified; local resolution forbidden')
         target=records.get(item['id'])
         if matches(target):return target
-        history=self.store.history()
         as_of=next(iter(records.values())).get('snapshot_revision') if records else None
+        cache_key=(self._realm_id,as_of,json.dumps(item,sort_keys=True))
+        if as_of and cache_key in self._resolved_references:
+            return deepcopy(self._resolved_references[cache_key])
+        history=self.store.history()
         if as_of:
             history=history[history.index(as_of):] if as_of in history else []
         if item.get('snapshot') and item['snapshot'] not in history:raise ValueError('reference snapshot is outside the historical horizon')
@@ -110,7 +129,11 @@ class RealmService:
         for revision in revisions:
             historic=self._load(self.store.snapshot(revision),historical=True)[-1]
             target=historic.get(item['id'])
-            if matches(target):return target
+            if matches(target):
+                if as_of:
+                    self._resolved_references[cache_key]=deepcopy(target)
+                    while len(self._resolved_references)>2048:self._resolved_references.popitem(last=False)
+                return target
         raise ValueError('unresolved reference: '+item['id'])
 
     def _relation_ref(self, relation):
@@ -326,7 +349,7 @@ class RealmService:
                 'coverage': 'explicit authorized contexts only'}
 
     def search_records(self, scopes, *, query='', limit=20, offset=0,
-                       expected_snapshot=None, source_byte_limit=1048576):
+                       expected_snapshot=None, source_byte_limit=1048576, match='all', work_only=False):
         """Search canonical records and their owned UTF-8 assets; return exact refs.
 
         An empty query browses the selected contexts. Pagination must pin the first
@@ -334,6 +357,8 @@ class RealmService:
         """
         if not isinstance(query, str) or len(query) > 2000:
             raise ValueError('query must be bounded text')
+        if match not in {'all','ranked'} or type(work_only) is not bool:
+            raise ValueError('Unknown search mode')
         if type(limit) is not int or not 1 <= limit <= 100:
             raise ValueError('limit must be between 1 and 100')
         if type(offset) is not int or offset < 0 or (offset and not expected_snapshot):
@@ -344,11 +369,14 @@ class RealmService:
         if expected_snapshot and expected_snapshot != snapshot['revision']:
             from ekk.model import Conflict
             raise Conflict('search snapshot changed; restart pagination')
-        terms = list(dict.fromkeys(re.findall(r'\w+', query.casefold())))
+        from .discovery import terms as query_terms, rank
+        terms = query_terms(query)
         hits = []
         omitted_sources = 0
         text_suffixes = {'.md', '.txt', '.csv', '.tsv', '.json', '.yaml', '.yml', '.html', '.xml'}
         for row in records.values():
+            if work_only and row['metadata'].get('work',{}).get('schema')!='ekk.work/0.1':
+                continue
             if not set(row['metadata']['scope']) & set(scopes):
                 continue
             try:
@@ -365,29 +393,26 @@ class RealmService:
                 if len(raw) > source_byte_limit:
                     omitted_sources += 1
                 try:
-                    source_text = raw[:source_byte_limit].decode('utf-8')
+                    chunk=raw[:source_byte_limit]
+                    source_text = self.discovery_index.text(chunk) if self.discovery_index else chunk.decode('utf-8')
                 except UnicodeDecodeError:
                     omitted_sources += 1
                     continue
                 sections.append((asset['path'], source_text))
-            searchable = '\n'.join(text for _, text in sections).casefold()
-            if terms and not all(term in searchable for term in terms):
-                continue
-            matched_asset, excerpt = sections[0]
-            if terms:
-                matched_asset, excerpt = max(sections, key=lambda part: sum(term in part[1].casefold() for term in terms))
-            position = min((excerpt.casefold().find(term) for term in terms if term in excerpt.casefold()), default=0)
-            start = max(0, position - 120)
-            score = sum(3 if term in row['metadata']['title'].casefold() else 1 for term in terms)
+            matched=rank(terms,sections,row['metadata']['title'],row['metadata'].get('aliases',[]),match)
+            if matched is None:continue
+            if matched['matched_asset']:
+                asset=next(a for a in row['metadata']['source']['assets'] if a['path']==matched['matched_asset'])
+                matched['fragment']['sha256']=asset['sha256']
             hits.append({'reference': self._query_reference(realm['id'], row),
                          'title': row['metadata']['title'], 'kind': row['metadata']['kind'],
-                         'scopes': row['metadata']['scope'], 'excerpt': excerpt[start:start + 600],
-                         'matched_asset': matched_asset, 'score': score})
+                         'scopes': row['metadata']['scope'], **matched,
+                         **({'work':{k:v for k,v in row['metadata']['work'].items() if k in ('status','intention','next_step')}} if work_only else {})})
         hits.sort(key=lambda item: (-item['score'], item['reference']['id']))
         page = hits[offset:offset + limit]
         next_offset = offset + len(page) if offset + len(page) < len(hits) else None
         return {'schema': 'ekk.search/0.1', 'realm': realm['id'], 'snapshot': snapshot['revision'],
-                'query': query, 'results': page, 'total_matches': len(hits), 'next_offset': next_offset,
+                'query': query, 'match':match, 'results': page, 'total_matches': len(hits), 'next_offset': next_offset,
                 'incomplete': bool(next_offset is not None or omitted_sources),
                 'source_search': {'encoding': 'UTF-8', 'omitted_or_partial_assets': omitted_sources,
                                   'max_bytes_per_asset': source_byte_limit},
@@ -578,6 +603,9 @@ class RealmService:
 
     def propose(self, changes, *, base=None, grounds=None, explanation=None):
         snapshot = self.store.snapshot(base)
+        return self._propose(changes, snapshot, grounds=grounds, explanation=explanation)
+
+    def _propose(self, changes, snapshot, *, grounds=None, explanation=None):
         realm=self.codec.load_yaml(snapshot['files'][CONTROL[0]])
         roots=self._roots(realm)
         permitted_roots=roots['record_roots']+[roots['source_root']]
@@ -608,16 +636,21 @@ class RealmService:
         return proposal
 
     def capture(self, data, *, title, scope, filename='original.bin'):
+        snapshot = self.store.snapshot()
+        realm = self.codec.load_yaml(snapshot['files'][CONTROL[0]])
+        changes = self._capture_changes(data, title=title, scope=scope,
+                                        filename=filename, roots=self._roots(realm))
+        return self._propose(changes, snapshot)
+
+    def _capture_changes(self, data, *, title, scope, filename, roots):
         if not isinstance(data,bytes): raise ValueError('source must be exact bytes')
         if PurePosixPath(filename).name != filename or filename in ('.','..'): raise ValueError('filename must be a basename')
         m = self._meta('source',title,scope)
-        realm=self.codec.load_yaml(self.store.snapshot()['files'][CONTROL[0]])
-        roots=self._roots(realm)
         path = f"{roots['source_root']}/{m['id']}/{filename}"
         m['source'] = {'assets':[{'path':path,'sha256':digest(data)}]}
         m['recorded_at']=self._now()
         root='records' if 'records' in roots['record_roots'] else roots['record_roots'][0]
-        return self.propose({path:data,f"{root}/{m['id']}.md":self.codec.encode(m)})
+        return {path:data,f"{root}/{m['id']}.md":self.codec.encode(m)}
 
     def retain(self, artifacts, *, title, body, scope, repository_evidence=None):
         """Prepare exact sources and one discoverable, unaccepted result together."""
@@ -625,16 +658,17 @@ class RealmService:
             raise ValueError('retain accepts at most 32 source artifacts')
         if not isinstance(title, str) or not title or not isinstance(body, str) or not body.strip():
             raise ValueError('retain requires a title and a nonempty result body')
-        realm = self.codec.load_yaml(self.store.snapshot()['files'][CONTROL[0]])
-        roots = self._roots(realm)['record_roots']
+        snapshot = self.store.snapshot()
+        realm = self.codec.load_yaml(snapshot['files'][CONTROL[0]])
+        layout = self._roots(realm)
+        roots = layout['record_roots']
         changes = {}; references = []
         for artifact in artifacts:
             if not isinstance(artifact, dict) or set(artifact) - {'data', 'filename', 'title'}:
                 raise ValueError('artifact requires exact data, filename and optional title')
-            proposal = self.capture(artifact['data'], title=artifact.get('title', artifact['filename']),
-                                    scope=scope, filename=artifact['filename'])
-            for path, encoded in proposal['changes'].items():
-                raw = base64.b64decode(encoded, validate=True)
+            captured = self._capture_changes(artifact['data'], title=artifact.get('title', artifact['filename']),
+                                    scope=scope, filename=artifact['filename'], roots=layout)
+            for path, raw in captured.items():
                 changes[path] = raw
                 if path.endswith('.md') and any(path.startswith(root + '/') for root in roots):
                     try: metadata = self.codec.decode(raw)['metadata']
@@ -651,7 +685,7 @@ class RealmService:
                 raise ValueError('repository evidence must be a recorded declaration')
             metadata['repository_evidence'] = repository_evidence
         changes[f"{root}/{metadata['id']}.md"] = self.codec.encode(metadata, body)
-        return self.propose(changes)
+        return self._propose(changes, snapshot)
 
     def verify_retention(self, scopes, proposal, receipt):
         """Read a publication back under current access; verify sources as bytes.

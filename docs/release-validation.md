@@ -1,3 +1,66 @@
+# EKK 0.8 release validation
+
+The final frozen English edition passed **448 kernel tests**, each
+collected and executed exactly once across four isolated fixture processes using
+the installed non-editable Python 3.13 wheel. The 108 selected
+runtime, schema, pack, test and tool inputs remained byte-identical throughout.
+No tests were skipped. Earlier superseded or interrupted candidate runs are not
+counted as this acceptance.
+
+The private installed Gateway passed **24 tests** with this same kernel. Its
+stdio transport exposes **50 tools**; actual owner-route brief entry
+and the optional direct-work guide succeeded. Installed payloads match the wheel
+and reviewed source; CLI and Gateway dependencies pass `pip check`.
+
+The connected installed scenario covers durable background publication, exact
+readback and discovery, version conflicts, unchanged author files, explicit
+unregistered waiting, operational backup/restore, admission boundaries, a
+zero-call local guide, quarantine and old-reader compatibility. The previous
+0.6 runtime reads the scenario's ordinary records; it does not implement new
+0.8 commands. Preserved compatibility evidence also includes the original
+starter's **18 tests**, **6 research-protocol contracts** and **4 replay checks**.
+
+Real owner work was published through the queue and found again through search.
+Local installation updated the CLI, Gateway, shared skill and four enrolled
+profile instruction links, preserving profile configuration and owner routing.
+Previous entrypoints and exact rollback bytes are retained. The restored fixture
+and earlier reader establish bounded compatibility, not universal downgrade
+support for future records. Live canonical stores were not restored or migrated.
+
+## Measurement and evidence limits
+
+Five warm CLI entries on the stated personal corpus took
+3.004, 2.618, 2.614, 2.616 and 2.587 seconds (median **2.616s**), returning
+7,262 bytes. Durable local enqueue took **1.209s**; this is not publication
+latency. These are small before-activation observations, not a population p95 or
+a controlled comparison with older logs. An installed Gateway read under
+concurrent acceptance load took **11.979s**, returning 6,856 bytes; it is a
+different operation/load condition and is reported separately.
+
+Technical checks establish integrity and integration, not better agent judgment,
+productivity or human benefit. Those remain subject to ordinary use and feedback.
+No artificial model trial was run. The authored-source adapter awaits the owner's
+folder choice. An actual Codex schedule receipt was recorded for release waiting;
+a deferred wake while this turn stayed active was not observed. Local transport
+health does not establish that an existing ChatGPT conversation refreshed its
+cached tool catalog.
+
+## Exact release inputs
+
+Wheel SHA-256:
+`c8be532ddacb7517b958c472cd66656092809401dee3307309aeec889d1cdacb`.
+
+Frozen input map SHA-256:
+`5722f107103dbb75d4dc88b5616693faf034a0638917196fb38e82e0c86b32df`.
+
+The input map hashes compact sorted JSON of relative path-to-SHA-256 pairs.
+Finalization changes only these release documents and their generated English
+export/provenance manifests. The tested runtime, tests, schemas, packs and tools
+remain unchanged. Separate concurrent semantic-shadow development is excluded
+from this release snapshot. Public publication requires its own authorization.
+
+---
+
 # EKK 0.7 release validation
 
 On 2026-09-09 the polished English release passed **431 runtime tests**

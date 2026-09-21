@@ -5,6 +5,9 @@ from .adapters.command_line import main as current_main
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in {'work','queue','task','source','guide','improve'}:
+        from .adapters.activity_cli import main as activity_main
+        return activity_main(argv[0],argv[1:])
     if argv and argv[0] == 'method':
         from .adapters.method_cli import main as method_main
         return method_main(argv[1:])
