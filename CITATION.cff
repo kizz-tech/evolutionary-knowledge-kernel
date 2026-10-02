@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use this software, please cite this project and its version."
 title: "EKK: Evolutionary Knowledge Kernel"
 type: software
-version: "0.9.0"
+version: "0.9.1"
 authors:
   - name: "Maxim"
 abstract: "Experimental personal work environment with shared continuity, revisable methods and action-readiness assessment from current context and configured check reports. Empirical effectiveness remains unmeasured."

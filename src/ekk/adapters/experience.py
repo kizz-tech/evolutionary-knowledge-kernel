@@ -146,15 +146,32 @@ def workspace_binding(workspace):
             'contexts': list(bindings[0].get('contexts') or [])}
 
 
-def _route(workspace, profile):
-    return argparse.Namespace(cwd=Path(workspace), profile=profile, realm=None, root=None, scope=[], state_dir=None,
-                              _explicit_profile=False)
+OWNER_PROFILE = 'personal'
+OWNER_REALM = 'personal'
 
 
-def retain_through_queue(workspace, profile, *, key, title, body, artifacts=(), experience=None, preference=None, supersedes=None):
+def _route(workspace, profile, realm=None):
+    """The workspace's bound route, or with ``realm`` an explicit realm alias of ``profile``."""
+    return argparse.Namespace(cwd=Path(workspace), profile=profile, realm=realm, root=None, scope=[], state_dir=None,
+                              _explicit_profile=realm is not None)
+
+
+def owner_route(workspace):
+    """The owner's personal realm, where owner-wide preferences live: profile 'personal', realm alias 'personal'."""
+    from .local_profile import LocalProfile
+    try:
+        LocalProfile(OWNER_PROFILE).resolve(OWNER_REALM)
+    except (ValueError, OSError) as exc:
+        raise ValueError(f"Owner-wide preferences need the owner's personal realm: a profile named '{OWNER_PROFILE}' "
+                         f"with the realm alias '{OWNER_REALM}' in the local registry ({exc})") from exc
+    return _route(workspace, OWNER_PROFILE, OWNER_REALM)
+
+
+def retain_through_queue(workspace, profile, *, key, title, body, artifacts=(), experience=None, preference=None, supersedes=None,
+                         route=None):
     from .activity_cli import resolve
     from .command_line import queue_retention
-    args = _route(workspace, profile)
+    args = route or _route(workspace, profile)
     app, scopes, _ = resolve(args)
     return queue_retention(args, app, scopes, list(artifacts), title=title, body=body, key=key,
                            experience=experience, preference=preference, supersedes=supersedes)
@@ -233,7 +250,14 @@ class Observer:
                 else:
                     self.store.count('corrections_without_prior_work')
             return bool(added)
-        state = {'repositories': repository_state(workspace, document.get('heads'), fresh=fresh and self.clock() - at <= STATE_FRESH_SECONDS)}
+        # Taking the signatures in the hook would cost 237–283 ms on a 2,500-file checkout (medians of five
+        # `git status` runs, 2 October 2026, under the owner's usual load), so the observer takes them and an
+        # event it processes late can credit its session by commits only. The count makes that visible.
+        late = self.clock() - at > STATE_FRESH_SECONDS
+        known = fresh and not late
+        state = {'repositories': repository_state(workspace, document.get('heads'), fresh=known)}
+        if late and state['repositories']:
+            self.store.count('events_state_unknown')  # processed late: credited by commits only
         if event == 'Stop':
             text = document.get('text') or ''
             if not text and document.get('transcript'):
@@ -385,38 +409,63 @@ class Observer:
         return total
 
 
+def _listed(row):
+    metadata = row['metadata']
+    return {'id': metadata['id'], 'title': metadata['title'], 'date': str(metadata.get('created_at', ''))[:10]}
+
+
+def current_preferences(current, *, owner_wide):
+    """Owner-stated preferences in force, newest first: the project's own, or the owner-wide ones (area 'owner:all')."""
+    rows = [row for row in current.values() if rules.owner_stated(row['metadata'])
+            and (row['metadata']['preference'].get('area') == rules.OWNER_AREA) == owner_wide]
+    return sorted((_listed(row) for row in rows), key=lambda item: item['date'], reverse=True)
+
+
+def owner_preferences(workspace):
+    """The owner-wide preferences in force, read from the personal realm; none when it is not configured or readable."""
+    from .activity_cli import resolve
+    try:
+        app, scopes, _ = resolve(owner_route(workspace))
+        current = app.card_view(scopes)
+    except (ValueError, OSError, KeyError, PermissionError):
+        return []
+    return current_preferences(current, owner_wide=True)
+
+
 def write_card(workspace, profile):
-    """Session card: the contract, the owner's current preferences and the latest results."""
+    """Session card: the contract, the owner's current preferences (the project's, then owner-wide) and the latest results.
+
+    Selection is the application's: readable records of the bound contexts,
+    replaced ones left out as entry leaves them out.
+    """
     from .activity_cli import resolve
     app, scopes, _ = resolve(_route(workspace, profile))
-    records = app._query_view(scopes)[3]
-    def target(ref):
-        return ref['id'] if isinstance(ref, dict) else ref
-    replaced = {target(ref) for row in records.values() for ref in row['metadata'].get('supersedes', [])
-                if target(ref) != row['metadata']['id']}
-    def listed(row):
-        metadata = row['metadata']
-        return {'id': metadata['id'], 'title': metadata['title'], 'date': str(metadata.get('created_at', ''))[:10]}
-    rows = [row for row in records.values() if set(row['metadata']['scope']) & set(scopes)]
-    preferences = sorted((listed(row) for row in rows if rules.owner_stated(row['metadata']) and row['metadata']['id'] not in replaced),
-                         key=lambda item: item['date'], reverse=True)
-    results = sorted((listed(row) for row in rows if row['metadata']['kind'] == 'outcome'), key=lambda item: item['date'], reverse=True)
+    current = app.card_view(scopes)
+    preferences = current_preferences(current, owner_wide=False)
+    results = sorted((_listed(row) for row in current.values() if row['metadata']['kind'] == 'outcome'), key=lambda item: item['date'], reverse=True)
+    owner_wide = owner_preferences(workspace)
     path = card_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = path.with_name(f'.{path.name}.{os.getpid()}')
     descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
-        stream.write(rules.card(preferences, results))
+        stream.write(rules.card(preferences, results, owner_wide))
     os.replace(temporary, path)
     return path
 
 
-def card_after_publication(cwd, profile):
-    """Called by the queue worker once a result is in the realm, so the next session sees it."""
+def card_after_publication(cwd):
+    """Called by the queue worker once a result is in the realm, so the next session sees it.
+
+    The card belongs to the bound workspace enclosing ``cwd`` and is built on its
+    own binding, whichever realm the publication went to (an owner-wide
+    preference goes to the personal realm).
+    """
     try:
         workspace = None if switched_off() else workspace_of(cwd)
-        if workspace is not None:
-            write_card(str(workspace), profile)
+        bound = workspace_binding(workspace) if workspace is not None else None
+        if bound is not None:
+            write_card(str(workspace), bound['profile'])
     except Exception:
         pass  # a card is a convenience; publication has already succeeded
 

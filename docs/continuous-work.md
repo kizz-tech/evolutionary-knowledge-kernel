@@ -53,7 +53,11 @@ and `locator`; the external tracker remains authoritative for its own state.
 
 ## Durable publication
 
-`retain` and `capture` already queue their request and return at once. For other
+`retain`, `decide` and `capture` already queue their request and return at
+once; a decision travels as a retention request with `decision` (the
+`ekk.decision/0.1` annotation: `stated_by`, optional `reason` and `revisit`,
+`source` with `host`, `session` and `at`), `basis` (exact grounds) and
+`aliases`, and the publisher composes the record. For other
 durable writes, `queue submit` freezes an exact request locally before
 starting a short-lived publisher. No long-running daemon is installed:
 
@@ -86,6 +90,28 @@ route. `queue restore` takes `archive`, `sha256`, `destination`, restores to a n
 directory and does not activate it. Inspect it with `queue status --state-dir DIR`
 using the same explicit owner route. Draining checks current rights and routes.
 Canonical `backup` remains separate. Neither archive registers host schedules.
+
+## Decisions, acceptance and preferences
+
+`ekk decide --cwd PROJECT --title '<decision>' --result-file FILE` records an
+unaccepted `decision` with `--reason`, `--revisit`, repeatable `--ground ID` and
+`--alias NAME`, `--supersedes ID` (a decision or an outcome, exactly) and
+`--stated-by owner-relayed --statement-session ID` when an agent relays the
+owner's words; the JSON request takes `title`, `body`, `reason`, `revisit`,
+`basis`, `aliases`, `supersedes` (exact references), `stated_by` and
+`statement_session`. Acceptance is the owner's separate act: `ekk accept` with
+`references`, `expected_snapshot`, `idempotency_key` and an optional
+`statement` (`--statement-file JSON`: `by: owner`, `via: review_page |
+host_chat | cli`, `at` RFC 3339, optional `host`, `session`, `words`), which the
+receipt keeps and the result returns. Who runs the command is never inferred.
+
+`ekk observe prefer --cwd PROJECT --statement TEXT` records a preference with a
+declared origin: `--stated-by agent` (default) or `owner-relayed` with
+`--statement-session ID`; `owner` is set only by the review page. `--owner-wide`
+records it for every project in the owner's personal realm (profile and realm
+alias `personal`) with `preference.area: owner:all`; the review page's `[a]` mark
+does the same for a kept correction. The session card lists the project's
+owner-stated preferences, then the owner-wide ones.
 
 ## Author notes, tasks and waiting
 

@@ -230,7 +230,7 @@ Target: subagent re-entry halved.
 
 The owner delegated the open decisions on 2 October; they are recorded as
 D-1.0-09 to D-1.0-21 in [decisions](decisions.md). An adversarial review of the
-first 0.9.0 change set (eight lenses, 61 confirmed findings) led to the second
+first 0.9.0 change set (eight lenses, 60 confirmed findings) led to the second
 episode rule, session-credited change detection, held results, labelled
 preference provenance, standing-preserving supersession and ranking priors in
 place of a strict archive tier; the corrections are part of 0.9.0.
@@ -238,8 +238,8 @@ place of a strict archive tier; the corrections are part of 0.9.0.
 | Component | State | Notes |
 | --- | --- | --- |
 | A. Write path | Done in 0.8.4, hardened in 0.9.0 | Incremental verification (the A4 choice) that still compares every journal with its Git evidence, version index from commit deltas, queued capture, a publisher that does not orphan late requests, a weekly full audit from the background worker, `local_install.py warm`. Later writes took 11 s on a copy of the larger store and about 25 s on the store itself |
-| B. Experience from host events | Done in 0.9.0 | Four events instead of five: subagent and compaction events are not needed (D-1.0-10). Episode rule 2 (D-1.0-11, D-1.0-18): outcomes only for changes credited to the session, substantial reports held for the owner, corrections counted, never published by themselves |
-| C. Current-first knowledge | Done in 0.9.0 | Supersession heads that preserve standing (D-1.0-21), archive as a prior, preferences as records with labelled provenance (D-1.0-12, D-1.0-13). No imported decision family was migrated |
+| B. Experience from host events | Done in 0.9.0, corrected in 0.9.1 | Four events instead of five: subagent and compaction events are not needed (D-1.0-10). Episode rule 2 (D-1.0-11, D-1.0-18): outcomes only for changes credited to the session, substantial reports held for the owner, corrections counted, never published by themselves. The final report is the outcome (D-1.0-22); late events are counted, signatures stay with the observer (D-1.0-24) |
+| C. Current-first knowledge | Done in 0.9.0, extended in 0.9.1 | Supersession heads that preserve standing (D-1.0-21), archive as a prior, preferences and decisions as records with declared provenance (D-1.0-12, D-1.0-13, D-1.0-25); the card selects as entry does (D-1.0-23); documents are projections of the records (D-1.0-26). No imported decision family was migrated |
 | D. Relevance | Partly | Record abstract, grounds with references, duplicate text indexed once, governing first, priors recorded beside plain order: done. Task-term weights: measured, no gain, not applied (D-1.0-15). Advisor: adapter, batch shadow over the review queue and an agreement report exist; the comparison needs owner labels |
 | E. One agent contract | Done in 0.9.0 | The contract is delivered at session start by the hook and is the whole general skill; a project that cannot own a record gets the variant that says so; project files keep only binding and product rules |
 | F. Evidence | Done in 0.9.0 | Frozen September baseline for corrections and retention; delivery and plain order recorded by entry itself; one review page for relevance (both orders mixed), corrections, held and automatic results (D-1.0-19) |

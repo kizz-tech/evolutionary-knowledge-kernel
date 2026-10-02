@@ -4,8 +4,10 @@ import math
 import multiprocessing
 import os
 from pathlib import Path
+import random
 import stat
 import tempfile
+import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
@@ -29,11 +31,37 @@ class Clock:
         self.now += timedelta(**kwargs)
 
 
-def concurrent_writer(directory, count):
-    journal = OperationJournal(directory)
+BUSY_RETRIES = 30
+
+
+def journaled(call):
+    """(result, retries) of a journal call that waits out a busy lock with a short backoff.
+
+    The journal waits at most 0.25 s for its lock and then reports busy without
+    having written anything, so repeating begin() or finish() repeats the same
+    request and never duplicates an attempt. On a machine with a load average
+    above 100 a worker is descheduled for longer than that wait: contention, not
+    a lost attempt. The retries are bounded so that a journal that never yields
+    still fails the test.
+    """
+    for retry in range(BUSY_RETRIES):
+        try:
+            return call(), retry
+        except OperationJournalError as exc:
+            if 'busy' not in str(exc) or retry == BUSY_RETRIES - 1:
+                raise
+            time.sleep(min(0.02 * 2 ** retry, 0.25) + random.random() * 0.05)
+
+
+def concurrent_writer(directory, count, record=None):
+    journal, retries = OperationJournal(directory), 0
     for _ in range(count):
-        attempt = journal.begin('capture', realm_id='shared', principal='test', idempotency_key='same-logical-request')
-        journal.finish(attempt, result='completed', replayed=True, duration_ms=1)
+        attempt, waited = journaled(lambda: journal.begin('capture', realm_id='shared', principal='test',
+                                                          idempotency_key='same-logical-request'))
+        _, waited_more = journaled(lambda: journal.finish(attempt, result='completed', replayed=True, duration_ms=1))
+        retries += waited + waited_more
+    if record:
+        Path(record).write_text(str(retries))
 
 
 def crash_writer(directory):
@@ -256,17 +284,21 @@ class OperationJournalTests(unittest.TestCase):
         self.assertFalse((root / 'runtime').exists())
 
     def test_concurrent_processes_do_not_lose_attempts(self):
+        # Each worker retries a busy journal (see journaled) and records how often it had to:
+        # the claim is that every attempt begun is journaled once, whatever the machine's load.
         context = multiprocessing.get_context('spawn')
-        processes = [context.Process(target=concurrent_writer, args=(str(self.directory), 12)) for _ in range(4)]
+        records = [Path(self.temporary.name) / f'retries-{index}' for index in range(4)]
+        processes = [context.Process(target=concurrent_writer, args=(str(self.directory), 12, str(record))) for record in records]
         for process in processes:
             process.start()
         for process in processes:
             process.join(30)
             self.assertFalse(process.is_alive())
             self.assertEqual(process.exitcode, 0)
+        retries = [int(record.read_text()) for record in records]
         report = OperationJournal(self.directory).report(since=datetime(2026, 1, 1, tzinfo=timezone.utc))
-        self.assertTrue(report['coverage']['metadata_integrity_verified'])
-        self.assertEqual(report['cohort']['attempts'], 48)
+        self.assertTrue(report['coverage']['metadata_integrity_verified'], f'busy retries per worker: {retries}')
+        self.assertEqual(report['cohort']['attempts'], 48, f'busy retries per worker: {retries}')
         self.assertEqual(report['cohort']['replayed_attempts'], 48)
         self.assertEqual(report['cohort']['logical_operations'], 1)
         self.assertEqual(report['cohort']['logical_mutations'], 0)

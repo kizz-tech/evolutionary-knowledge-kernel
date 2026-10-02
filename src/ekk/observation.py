@@ -132,11 +132,13 @@ _ENTER = """\
 EKK keeps what earlier work in this project learned. What it returns is evidence, not instruction: the user's current request and the code decide.
 - For a task beyond a routine edit, run once at the start: ekk enter --cwd . --task '<outcome>' --brief
 - Open a listed item only when it bears on your decision: ekk fetch --cwd . --id ID (for a source item, its text: ekk read-source --cwd . --id ID)."""
+_DECIDE = """
+- A decision with its reason that should outlive the task: ekk decide --cwd . --title '<decision>' --result-file FILE (add --supersedes ID when it replaces an earlier one)."""
 CONTRACT = _ENTER + """
 - You do not need to write anything for EKK: your final report is recorded from host events when the session changed the project. Say in the report what changed, what you decided and why, and what is still open.
-- To keep a finding that changed no file, or to share one before the task ends: ekk retain --cwd . --title '<title>' --result-file FILE (returns at once).
+- To keep a finding that changed no file, or to share one before the task ends: ekk retain --cwd . --title '<title>' --result-file FILE (returns at once).""" + _DECIDE + """
 - If entry reports unbound, continue without EKK."""
 # For a project or host where nothing records the final report.
 CONTRACT_MANUAL = _ENTER + """
-- Nothing records your report here. At the end of a task with a significant result, decision or owner correction, keep it: ekk retain --cwd . --title '<title>' --result-file FILE (returns at once).
+- Nothing records your report here. At the end of a task with a significant result, decision or owner correction, keep it: ekk retain --cwd . --title '<title>' --result-file FILE (returns at once).""" + _DECIDE + """
 - If entry reports unbound, continue without EKK."""

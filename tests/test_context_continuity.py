@@ -326,19 +326,21 @@ class ContextContinuityTests(unittest.TestCase):
     def test_owner_preference_prior_orders_entry_but_not_the_floor_or_plain_order(self):
         self.add('owner-rule', 'Zebra habit.', preference={'schema': 'ekk.preference/0.1', 'area': 'style', 'stated_by': 'owner'})
         self.add('agent-guess', 'Zebra guess.', preference={'schema': 'ekk.preference/0.1', 'area': 'style', 'stated_by': 'agent'})
+        self.add('relayed-rule', 'Zebra relayed.', preference={'schema': 'ekk.preference/0.1', 'area': 'style', 'stated_by': 'owner_relayed'})
         self.add('plain-note', 'Zebra note.')
         self.add('faint', 'Zebra aside.', preference={'schema': 'ekk.preference/0.1', 'area': 'style', 'stated_by': 'owner'})
         self.add('old-view', 'Zebra old.')
         self.add('new-view', 'Current.', supersedes=[{'id': 'old-view'}])
-        scores = {'owner-rule': 4.0, 'agent-guess': 4.5, 'plain-note': 5.0, 'faint': 1.2, 'old-view': 8.0}
+        scores = {'owner-rule': 4.0, 'agent-guess': 4.5, 'relayed-rule': 3.2, 'plain-note': 5.0, 'faint': 1.2, 'old-view': 8.0}
         with patch('ekk.application.discovery.RecordRanker.scores', return_value=dict(scores)):
             context = self.app.context(['scope'], task='zebra')
-        # 1.2 * 1.5 would pass a floor of 2.0, but the floor reads the plain score. An agent-reported
-        # preference gets no prior. The head of a chain takes the plain score of the record it replaces.
-        self.assertEqual([('new-view', 8.0), ('owner-rule', 6.0), ('plain-note', 5.0), ('agent-guess', 4.5)],
+        # 1.2 * 1.5 would pass a floor of 2.0, but the floor reads the plain score. The owner's words count,
+        # whether from the review page or relayed by an agent; an agent's own reading gets no prior. The head
+        # of a chain takes the plain score of the record it replaces.
+        self.assertEqual([('new-view', 8.0), ('owner-rule', 6.0), ('plain-note', 5.0), ('relayed-rule', 4.8), ('agent-guess', 4.5)],
                          [(row['id'], row['discovery']['score']) for row in context['records']])
-        self.assertEqual([0.0, 4.0, None, None], [row['discovery'].get('plain_score') for row in context['records']])
-        self.assertEqual([('old-view', 'note'), ('plain-note', 'note'), ('agent-guess', 'preference'), ('owner-rule', 'preference')],
+        self.assertEqual([0.0, 4.0, None, 3.2, None], [row['discovery'].get('plain_score') for row in context['records']])
+        self.assertEqual([('old-view', 'note'), ('plain-note', 'note'), ('agent-guess', 'preference'), ('owner-rule', 'preference'), ('relayed-rule', 'preference')],
                          [(item['id'], item['kind']) for item in context['manifest']['ranking']['plain_order']])
 
     def test_a_governing_record_is_selected_before_optional_reading_or_named_as_left_out(self):

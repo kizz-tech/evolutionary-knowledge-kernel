@@ -1,3 +1,37 @@
+# EKK 0.9.1 release validation
+
+The 0.9.1 public export (371 reviewed files) was prepared from the development
+source with `tools/prepare_release.py` against the hash-pinned 0.9.0 export;
+every Python file is byte-identical to the development source except for
+Cyrillic string literals written as `\u` escapes with an identical AST and the
+English edition files reused from earlier releases with their recorded provenance.
+
+Validation on Python 3.13.5:
+
+- The frozen export ran the complete suite from its own tree
+  (`tools/run_tests.py` from the export root): **603 tests OK**, no failures, on
+  the bytes of the release source. The development source of the same code
+  ran the complete suite (602 tests) after the last change to the decision
+  projection on a machine with an unrelated load average above 200: 601 passed
+  and `test_lock_contention`, the timing-sensitive module of the 0.9.0 record,
+  passed when rerun alone.
+- Exporter and preparation checks (`test_reference_export`,
+  `test_prepare_release`) and the export's `tests/test_public_english.py` pass on
+  the export.
+- The wheel built from the export is byte-identical in its Python modules,
+  packs and schemas to the export, and the active local release of the same
+  source passed the equivalence gate against 0.9.0 on 17 real requests before
+  activation (`finalize_artifacts.py`, `verification.json`).
+- Two independent read-only reviews of the export (private material and English
+  edition; release consistency) ran before publication; their findings were
+  applied and the export was prepared again.
+- No tests were skipped. The empirical study remains not run; no model or human
+  benefit is claimed.
+
+The runtime of the same bytes is installed locally; its state is in
+[releases/1.0/status.md](releases/1.0/status.md) and the
+[0.9.1 release notes](release-notes-0.9.1.md).
+
 # EKK 0.9.0 release validation
 
 The 0.9.0 public export (363 reviewed files) was prepared from the development

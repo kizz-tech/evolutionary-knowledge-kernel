@@ -51,7 +51,7 @@ from .file_lock import LockBusy, acquire_lock
 OPERATIONS = frozenset({
     'init', 'enter', 'doctor', 'context', 'contexts', 'search', 'fetch',
     'read-source', 'resolve-historical', 'capture', 'propose', 'apply', 'accept', 'review',
-    'assurance', 'assess', 'export', 'recover', 'retain', 'diagnostics', 'backup', 'restore',
+    'assurance', 'assess', 'export', 'recover', 'retain', 'decide', 'diagnostics', 'backup', 'restore',
     'method.propose', 'method.evaluate', 'method.admit', 'method.use',
     'method.reconsider', 'method.quarantine', 'method.retire',
     'method.export', 'method.receive', 'method.inspect',

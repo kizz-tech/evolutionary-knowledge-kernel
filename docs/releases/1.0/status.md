@@ -4,11 +4,11 @@ target_version: "1.0.0"
 phase: delivered
 updated: "2026-10-02"
 scope: owner_delegated_decisions_recorded
-implementation: runtime_0.9.0_committed
-technical_verification: runtime_0.9.0_tested
-local_delivery: runtime_0.9.0_installed
-public_preparation: runtime_0.9.0_export_prepared
-public_publication: runtime_0.9.0_requested
+implementation: runtime_0.9.1_committed
+technical_verification: runtime_0.9.1_tested
+local_delivery: runtime_0.9.1_installed
+public_preparation: runtime_0.9.1_export_prepared
+public_publication: runtime_0.9.0_published_0.9.1_requested
 benefit: baseline_measured_comparison_not_run
 current_authority: implementation_of_delegated_scope
 ---
@@ -37,9 +37,19 @@ change of focus are deferred with recorded reasons.
   entry use (S06), the advisor adapter and batch shadow (S14, partly), and the
   write-path hardening from the review. Full suite: 587 tests OK on the 0.9.0
   source; no known failures.
-- An adversarial review of the first 0.9.0 change set (eight lenses, 61 confirmed
+- An adversarial review of the first 0.9.0 change set (eight lenses, 60 confirmed
   findings) was applied before installation; the material changes are recorded as
   D-1.0-11 (rule 2), D-1.0-13 (priors), D-1.0-18 to D-1.0-21.
+- 0.9.1: the owner's word as the only input of authority (`ekk decide`,
+  acceptance with the owner's statement, acceptance from the review page,
+  declared provenance, owner-wide preferences), documents as projections
+  (`ekk project decisions`), the hourly observer run, the final report as the
+  outcome, the session card through the entry's own selection; decisions
+  D-1.0-22 to D-1.0-26 and a revised D-1.0-12, all recorded with `ekk decide` in
+  the development realm. Two findings of an external review of the public
+  0.9.0 code are closed here (D-1.0-22, D-1.0-23). Installed on 2026-10-02 with
+  `tools/local_install.py` after the equivalence gate against 0.9.0 (17 real
+  requests identical) and `warm`; the hourly launch agent is registered.
 
 ## Local delivery
 

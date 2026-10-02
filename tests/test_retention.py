@@ -163,6 +163,36 @@ print(json.dumps(capture_once(app,b'exact\\r\\nsource\\x00\\xff',title='Syntheti
         view = self.app.context(['scope'], task='Finished integration')
         self.assertFalse(next(r for r in view['records'] if r['id']==result['reference']['id'])['governs'])
 
+    def test_a_decision_request_is_prepared_by_decide_and_keyed_apart_from_a_result(self):
+        decision = {'schema': 'ekk.decision/0.1', 'stated_by': 'agent', 'reason': 'Because  it held.', 'source': {'host': 'unknown', 'at': '2026-10-02'}}
+        kwargs = {'title': 'Rule', 'body': 'The rule.', 'scopes': ['scope'], 'key': 'decided'}
+        receipt = retain_once(self.app, [], decision=decision, **kwargs)
+        record = self.app.fetch_record(['scope'], receipt['result_reference'])
+        self.assertEqual(('decision', {**decision, 'reason': 'Because it held.'}), (record['metadata']['kind'], record['metadata']['decision']))
+        self.assertEqual('The rule.\n\n**Reason, rejected alternative:** Because it held.\n', record['body'])
+        self.assertNotIn('review', record['metadata'])
+        self.assertEqual([receipt['source_references'][0]['id']], [ref['id'] for ref in record['metadata']['basis']])  # the statement, preserved
+        self.assertEqual(receipt, retain_once(self.app, [], decision=decision, **kwargs))
+        with self.assertRaises(IdempotencyConflict):  # the same key without the decision is another request
+            retain_once(self.app, [], **kwargs)
+        with self.assertRaises(ValueError):  # grounds and aliases belong to a decision
+            retain_once(self.app, [], title='Rule', body='The rule.', scopes=['scope'], key='other', aliases=['rule'])
+        # A decision supersedes a decision or an outcome exactly, never a note; its origin is declared from a closed set.
+        outcome = retain_once(self.app, [], title='Result', body='Result.', scopes=['scope'], key='result')['result_reference']
+        exact = {key: outcome[key] for key in ('id', 'revision', 'digest')}
+        proposal = self.app.decide('Replace it.', title='Replacement', scope=['scope'], decision=decision, supersedes=[exact], aliases=['replacement'])
+        self.app.apply(proposal, idempotency_key='replacement')
+        later = next(row for row in self.app._load(self.app.store.snapshot())[-1].values() if row['metadata'].get('supersedes'))
+        self.assertEqual(([exact], ['replacement']), (later['metadata']['supersedes'], later['metadata']['aliases']))
+        note = self.app._meta('note', 'Note', ['scope'])
+        raw = self.app.codec.encode(note, 'A note.')
+        self.app.apply(self.app.propose({f"records/{note['id']}.md": raw}), idempotency_key='note')
+        note_ref = {'id': note['id'], 'revision': 1, 'digest': 'sha256:' + hashlib.sha256(raw).hexdigest()}
+        for bad in ({'supersedes': [note_ref]}, {'decision': {**decision, 'stated_by': 'owner'}}, {'decision': {**decision, 'extra': 1}},
+                    {'decision': {**decision, 'source': {'where': 'x'}}}, {'aliases': ['a', 'a']}, {'basis': [{'id': note['id']}]}):
+            with self.assertRaises(ValueError):
+                self.app.decide('Statement.', title='Bad', scope=['scope'], **{'decision': decision, **bad})
+
     def test_capture_key_payload_changes_and_revoked_access_are_rejected(self):
         receipt = self.capture()
         with self.assertRaises(IdempotencyConflict):

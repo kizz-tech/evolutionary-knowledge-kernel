@@ -28,6 +28,16 @@ New release packages live at `docs/releases/<target-version>/`:
 | `decisions.md` | Consequential choices, alternatives and reasons; omit when no such choice exists |
 | `sources.md` | Relevant prior specifications, research and reading limits; omit when inline references suffice |
 
+A `decisions.md` whose rows are decision records in the project's realm is a
+projection, not a second home: `ekk project decisions --cwd . --out
+docs/releases/<target-version>/decisions.md` renders the current decision records
+of the bound contexts as the table (ID, decision, reason or rejected alternative,
+revisit condition, state), under a preamble that names the generation date. The
+state is `accepted`, `superseded by ID` or `proposed`, as the records and their
+receipts say. To change a decision, change its record (a new record that
+supersedes the old one, or acceptance) and generate the table again; an edit to
+the table itself is lost at the next generation.
+
 Add evidence files only when evidence exists. Operational paths, logs, credentials,
 private material and installation receipts stay with their private owner; public
 documents contain an appropriate technical summary. A directory is not a reason

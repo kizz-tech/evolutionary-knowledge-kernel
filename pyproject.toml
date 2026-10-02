@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "evolutionary-knowledge-kernel"
-version = "0.9.0"
+version = "0.9.1"
 description = "Continuous work, proportionate context and improvement through use"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}

@@ -11,6 +11,30 @@ from ekk.model import Conflict, validate_envelope, validate_reference, digest, n
 
 CONTROL = ('.ekk/realm.yaml', '.ekk/governance.yaml', '.ekk/packs.lock.yaml')
 KINDS = {'context','note','source','observation','claim','question','decision','policy','action','outcome'}
+# Provenance labels for cooperating agents, never authentication: who stated a
+# decision or a preference, and through which of the owner's own paths an
+# acceptance was spoken. 'owner' is set only by the review page.
+DECISION_SCHEMA = 'ekk.decision/0.1'
+DECISION_STATED_BY = ('owner_relayed', 'agent')
+STATEMENT_VIA = ('review_page', 'host_chat', 'cli')
+
+
+def acceptance_statement(value):
+    """The owner's words behind an acceptance, kept in the receipt as given.
+
+    Nothing about who runs the command is inferred: the receipt carries only
+    what the statement says. ``words`` is bounded; ``at`` is RFC 3339 with a zone.
+    """
+    if not isinstance(value, dict) or set(value) - {'by', 'via', 'host', 'session', 'at', 'words'}:
+        raise ValueError('statement names by, via and at, optionally host, session and words')
+    if value.get('by') != 'owner': raise ValueError("statement.by must be 'owner'")
+    if value.get('via') not in STATEMENT_VIA: raise ValueError('statement.via must be one of ' + ', '.join(STATEMENT_VIA))
+    if not isinstance(value.get('at'), str) or datetime.fromisoformat(value['at'].replace('Z', '+00:00')).tzinfo is None:
+        raise ValueError('statement.at must be an RFC 3339 time with a zone')
+    for name, limit in (('host', 64), ('session', 256), ('words', 600)):
+        if name in value and (not isinstance(value[name], str) or len(value[name]) > limit):
+            raise ValueError(f'statement.{name} must be text of at most {limit} characters')
+    return dict(value)
 
 class RecordVersions:
     """Which version of each record every published commit holds."""
@@ -631,14 +655,20 @@ class RealmService:
         result['incomplete'] = result['object_state'] != 'found'
         return result
 
-    def accept_records(self, scopes, references, *, expected_snapshot, idempotency_key):
-        """Accept exact bytes at an explicit base; retries use the ordinary write journal."""
+    def accept_records(self, scopes, references, *, expected_snapshot, idempotency_key, statement=None):
+        """Accept exact bytes at an explicit base; retries use the ordinary write journal.
+
+        ``statement`` is the owner's word behind the acceptance (see
+        acceptance_statement); it is kept in the receipt and returned, and it is
+        the only provenance recorded: who runs the command is not inferred.
+        """
         from .workspace import exact_reference
         if not isinstance(references, list) or not 1 <= len(references) <= 32:
             raise ValueError('acceptance requires 1 to 32 exact references')
         refs = [exact_reference(ref) for ref in references]
         if len({ref['id'] for ref in refs}) != len(refs):
             raise ValueError('duplicate acceptance references')
+        if statement is not None: statement = acceptance_statement(statement)
         _, realm, policy, _ = self._query_view(scopes)
         base = self.store.snapshot(expected_snapshot)
         base_records = self._load(base, historical=True)[-1]
@@ -649,8 +679,8 @@ class RealmService:
             self._query_readable(row, base_records, policy, scopes)
             self._authorized(policy, 'accept', row['metadata']['scope'])
         try:
-            return self.apply(self.propose({}, base=expected_snapshot),
-                              idempotency_key=idempotency_key, accept=[ref['id'] for ref in refs])
+            result = self.apply(self.propose({}, base=expected_snapshot), idempotency_key=idempotency_key,
+                                accept=[ref['id'] for ref in refs], statement=statement)
         except ValueError as exc:
             # The ordinary journal gets the first chance to resolve an exact
             # replay. An unresolvable old-base request is a conflict even when
@@ -659,6 +689,13 @@ class RealmService:
             if not isinstance(exc, Conflict) and self.store.snapshot()['revision'] != expected_snapshot:
                 raise Conflict('acceptance snapshot changed; read current context') from exc
             raise
+        # The receipt is the record of provenance: a replay returns what was written, not what was offered.
+        current = self.store.snapshot(); roots = self._roots(self.codec.load_yaml(current['files'][CONTROL[0]]))
+        recorded = None
+        for ref in refs:
+            raw = current['files'].get(f'{roots["receipts_root"]}/{digest(ref["id"].encode())}-{ref["digest"].removeprefix("sha256:")}.json')
+            if raw: recorded = json.loads(raw).get('statement'); break
+        return {**result, 'statement': recorded} if statement is not None or recorded is not None else result
 
     def doctor(self, revision=None):
         snapshot = self.store.snapshot(revision)
@@ -739,20 +776,7 @@ class RealmService:
         realm = self.codec.load_yaml(snapshot['files'][CONTROL[0]])
         layout = self._roots(realm)
         roots = layout['record_roots']
-        changes = {}; references = []
-        for artifact in artifacts:
-            if not isinstance(artifact, dict) or set(artifact) - {'data', 'filename', 'title'}:
-                raise ValueError('artifact requires exact data, filename and optional title')
-            captured = self._capture_changes(artifact['data'], title=artifact.get('title', artifact['filename']),
-                                    scope=scope, filename=artifact['filename'], roots=layout)
-            for path, raw in captured.items():
-                changes[path] = raw
-                if path.endswith('.md') and any(path.startswith(root + '/') for root in roots):
-                    try: metadata = self.codec.decode(raw)['metadata']
-                    except ValueError: continue
-                    if metadata.get('kind') == 'source':
-                        references.append({'id': metadata['id'], 'revision': metadata['revision'],
-                                           'digest': 'sha256:' + digest(raw)})
+        changes, references = self._retain_sources(artifacts, scope, layout)
         root = 'records' if 'records' in roots else roots[0]
         for name, value in (('experience', experience), ('preference', preference)):
             if value is not None and (not isinstance(value, dict) or not isinstance(value.get('schema'), str)
@@ -774,6 +798,82 @@ class RealmService:
                 raise ValueError('repository evidence must be a recorded declaration')
             metadata['repository_evidence'] = repository_evidence
         changes[f"{root}/{metadata['id']}.md"] = self.codec.encode(metadata, body)
+        return self._propose(changes, snapshot)
+
+    def _retain_sources(self, artifacts, scope, layout):
+        """Exact source descriptors for retained artifacts: (changes, pinned references)."""
+        if not isinstance(artifacts, list) or len(artifacts) > 32:
+            raise ValueError('retain accepts at most 32 source artifacts')
+        roots = layout['record_roots']
+        changes = {}; references = []
+        for artifact in artifacts:
+            if not isinstance(artifact, dict) or set(artifact) - {'data', 'filename', 'title'}:
+                raise ValueError('artifact requires exact data, filename and optional title')
+            captured = self._capture_changes(artifact['data'], title=artifact.get('title', artifact['filename']),
+                                    scope=scope, filename=artifact['filename'], roots=layout)
+            for path, raw in captured.items():
+                changes[path] = raw
+                if path.endswith('.md') and any(path.startswith(root + '/') for root in roots):
+                    try: metadata = self.codec.decode(raw)['metadata']
+                    except ValueError: continue
+                    if metadata.get('kind') == 'source':
+                        references.append({'id': metadata['id'], 'revision': metadata['revision'],
+                                           'digest': 'sha256:' + digest(raw)})
+        return changes, references
+
+    def decide(self, statement, *, title, scope, decision, supersedes=None, basis=None, aliases=None, artifacts=()):
+        """Prepare one unaccepted decision: its statement, reason and revisit condition.
+
+        The statement is preserved as an exact source and is the record's first
+        basis, so the owner can accept the decision later. ``decision`` labels who
+        stated it (an agent, or an agent relaying the owner's words) without
+        authenticating anyone. It may supersede an earlier decision or an
+        outcome, exactly. The body shape is canonical: the statement, then one
+        paragraph "**Reason, rejected alternative:** …", then "**Revisit when:** …".
+        """
+        if not isinstance(statement, str) or not statement.strip() or not isinstance(title, str) or not title:
+            raise ValueError('decide requires a title and a nonempty statement')
+        if not isinstance(decision, dict) or decision.get('schema') != DECISION_SCHEMA or set(decision) - {'schema', 'stated_by', 'reason', 'revisit', 'source'}:
+            raise ValueError('decision must declare ' + DECISION_SCHEMA + ' with stated_by, source and optional reason and revisit')
+        if decision.get('stated_by') not in DECISION_STATED_BY: raise ValueError('decision stated_by must be one of ' + ', '.join(DECISION_STATED_BY))
+        source = decision.get('source')
+        if not isinstance(source, dict) or set(source) - {'host', 'session', 'at'} or any(v is not None and not isinstance(v, str) for v in source.values()):
+            raise ValueError('decision source names host, session and at')
+        annotation = {'schema': DECISION_SCHEMA, 'stated_by': decision['stated_by']}
+        for name in ('reason', 'revisit'):
+            if decision.get(name) is not None:
+                if not isinstance(decision[name], str) or not decision[name].strip() or len(decision[name]) > 2000: raise ValueError('decision ' + name + ' must be short text')
+                annotation[name] = ' '.join(decision[name].split())
+        annotation['source'] = {k: v for k, v in source.items() if v is not None}
+        if aliases is not None and (not isinstance(aliases, list) or len(aliases) > 16 or len(set(aliases)) != len(aliases)
+                                    or any(not isinstance(a, str) or not a.strip() or len(a) > 200 for a in aliases)):
+            raise ValueError('aliases must be up to 16 distinct short names')
+        if basis is not None:
+            if not isinstance(basis, list) or len(basis) > 32: raise ValueError('bounded exact grounds required')
+            for ref in basis: validate_reference(ref, pinned=True)
+        snapshot = self.store.snapshot()
+        realm = self.codec.load_yaml(snapshot['files'][CONTROL[0]])
+        layout = self._roots(realm)
+        if supersedes:
+            if not isinstance(supersedes, list) or len(supersedes) > 8: raise ValueError('bounded exact supersession required')
+            records = self._load(snapshot)[-1]
+            for ref in supersedes:
+                validate_reference(ref, pinned=True)
+                if self._reference(ref, records)['metadata']['kind'] not in ('decision', 'outcome'):
+                    raise ValueError('a decision supersedes a decision or an outcome')
+        parts = [statement.strip()]
+        if 'reason' in annotation: parts.append('**Reason, rejected alternative:** ' + annotation['reason'])
+        if 'revisit' in annotation: parts.append('**Revisit when:** ' + annotation['revisit'])
+        words = {'data': statement.encode('utf-8'), 'filename': 'decision.md', 'title': 'Decision statement: ' + title[:80]}
+        changes, references = self._retain_sources([words, *artifacts], scope, layout)
+        root = 'records' if 'records' in layout['record_roots'] else layout['record_roots'][0]
+        metadata = self._meta('decision', title, scope, basis=[*references, *(basis or [])], decision=annotation,
+                              retention={'schema': 'ekk.retained-result/0.1',
+                                         'claim_source': 'owner_statement' if annotation['stated_by'] == 'owner_relayed' else 'recorded_assertion'})
+        if 'revisit' in annotation: metadata['review'] = {'when': [annotation['revisit']]}
+        if aliases: metadata['aliases'] = list(aliases)
+        if supersedes: metadata['supersedes'] = supersedes
+        changes[f"{root}/{metadata['id']}.md"] = self.codec.encode(metadata, '\n\n'.join(parts) + '\n')
         return self._propose(changes, snapshot)
 
     def verify_retention(self, scopes, proposal, receipt):
@@ -828,8 +928,9 @@ class RealmService:
                 visit(dependency,nested,consequential and dependency in evidence)
         for ref in basis_links(metadata):visit(ref,records,True)
 
-    def apply(self, proposal, *, idempotency_key, accept=()):
+    def apply(self, proposal, *, idempotency_key, accept=(), statement=None):
         if proposal.get('schema') != 'ekk.proposal/0.1': raise ValueError('invalid proposal')
+        if statement is not None and not accept: raise ValueError('a statement accompanies an acceptance')
         changes = {p:None if raw is None else base64.b64decode(raw,validate=True) for p,raw in proposal['changes'].items()}
         self.propose(changes,base=proposal['base']) # Recheck untrusted proposal paths.
         base = self.store.snapshot(proposal['base'])
@@ -918,7 +1019,7 @@ class RealmService:
                 validate_reference(ref,pinned=True)
                 target=self._reference(ref,records)
                 if target['metadata']['id'] not in accepted or target['digest']!=records[target['metadata']['id']]['digest'] or set(target['metadata']['scope']) != set(m['scope']): raise ValueError('replacement needs accepted target in same scopes')
-            receipt={'schema':'ekk.receipt/0.1','id':new_id(),'record_id':key,'record_revision':m['revision'],'record_sha256':r['digest'],'adopted_at':self._now(),'actor':self.principal,'governance_sha256':digest(current['files'][CONTROL[1]]),'policy_version':policy.get('version',1),'authority_basis':'trusted-local-policy-grant','base':current['revision'],'supersedes':self._receipt_supersedes(m)}
+            receipt={'schema':'ekk.receipt/0.1','id':new_id(),'record_id':key,'record_revision':m['revision'],'record_sha256':r['digest'],'adopted_at':self._now(),'actor':self.principal,'governance_sha256':digest(current['files'][CONTROL[1]]),'policy_version':policy.get('version',1),'authority_basis':'trusted-local-policy-grant','base':current['revision'],'supersedes':self._receipt_supersedes(m),**({'statement':statement} if statement is not None else {})}
             receipt_path=f'{self._roots(realm)["receipts_root"]}/{digest(key.encode())}-{r["digest"]}.json'
             previous=current['files'].get(receipt_path)
             if previous and json.loads(previous).get('base') == proposal['base'] and json.loads(previous).get('actor') == self.principal:
@@ -973,6 +1074,53 @@ class RealmService:
     def publication_revision(self):
         """Current publication token, without exposing storage representation."""
         return self.store.snapshot()['revision']
+
+    def _supersession(self, snapshot, records, eligible, accepted):
+        """Replacement between current records, as every reader must see it.
+
+        A reference pinned to an earlier version of its target, and a record
+        revising itself, replace nothing. An unaccepted record cannot replace an
+        accepted one: that link is only a claim, shown on both rows and never
+        forced into a selection. Returns successors, predecessors, hidden
+        successors (outside eligibility), claimed and claims.
+        """
+        def superseded_target(ref, own):
+            item = {'id': ref} if isinstance(ref, str) else ref
+            target_id = item.get('id', item.get('target'))
+            target = records.get(target_id)
+            if target is None or target_id == own: return None
+            if item.get('digest') and self._hash(item['digest']) != target['digest']: return None
+            if item.get('revision') and item['revision'] != target['metadata']['revision']: return None
+            if item.get('snapshot') and not (item.get('digest') or item.get('revision')) and item['snapshot'] != snapshot['revision']: return None
+            return target_id
+        successors, predecessors, hidden_successor, claimed, claims = {}, {}, set(), {}, {}
+        for key, r in records.items():
+            for ref in self._links(r['metadata'], 'supersedes'):
+                target_id = superseded_target(ref, key)
+                if target_id is None: continue
+                if target_id in accepted and key not in accepted:
+                    if key in eligible and target_id in eligible:
+                        claimed.setdefault(target_id, set()).add(key); claims.setdefault(key, set()).add(target_id)
+                elif key in eligible:
+                    successors.setdefault(target_id, set()).add(key); predecessors.setdefault(key, set()).add(target_id)
+                else: hidden_successor.add(target_id)
+        return successors, predecessors, hidden_successor, claimed, claims
+
+    def card_view(self, scopes):
+        """What a session card may list: the current, readable records of the selected contexts.
+
+        Readable as every public read defines it (the record and its dependency
+        closure inside the contexts), and current as entry defines it: a record
+        replaced by an exact successor of equal standing is not listed.
+        """
+        snapshot, _, policy, records = self._query_view(scopes)
+        accepted = self._acceptances(snapshot, records)
+        def readable(r):
+            try: self._query_readable(r, records, policy, scopes); return True
+            except PermissionError: return False
+        eligible = {k: r for k, r in records.items() if set(r['metadata']['scope']) & set(scopes) and readable(r)}
+        successors = self._supersession(snapshot, records, eligible, accepted)[0]
+        return {key: row for key, row in eligible.items() if key not in successors}
 
     def context(self, scopes, task='', budget=16000, *, focus=(), selection='discovery'):
         if selection not in ('discovery', 'action_requirements'):
@@ -1035,30 +1183,7 @@ class RealmService:
         # above; other governing records precede all optional reading below.
         ranker = discovery.RecordRanker(eligible, snapshot['files'], lead_chars=discovery.ENTRY_SOURCE_LEAD_CHARS, query_weight=self.task_terms.weight if self.task_terms is not None else None) if task else None
         scores = ranker.scores(task) if ranker else {}
-        # Supersession between different current records. A reference pinned to
-        # an earlier version of its target, and a record revising itself, replace nothing.
-        def superseded_target(ref, own):
-            item = {'id': ref} if isinstance(ref, str) else ref
-            target_id = item.get('id', item.get('target'))
-            target = records.get(target_id)
-            if target is None or target_id == own: return None
-            if item.get('digest') and self._hash(item['digest']) != target['digest']: return None
-            if item.get('revision') and item['revision'] != target['metadata']['revision']: return None
-            if item.get('snapshot') and not (item.get('digest') or item.get('revision')) and item['snapshot'] != snapshot['revision']: return None
-            return target_id
-        successors, predecessors, hidden_successor, claimed, claims = {}, {}, set(), {}, {}
-        for key, r in records.items():
-            for ref in self._links(r['metadata'], 'supersedes'):
-                target_id = superseded_target(ref, key)
-                if target_id is None: continue
-                # An unaccepted record cannot replace an accepted one: the link is
-                # only a claim, shown on both rows and never forced into the selection.
-                if target_id in accepted and key not in accepted:
-                    if key in eligible and target_id in eligible:
-                        claimed.setdefault(target_id, set()).add(key); claims.setdefault(key, set()).add(target_id)
-                elif key in eligible:
-                    successors.setdefault(target_id, set()).add(key); predecessors.setdefault(key, set()).add(target_id)
-                else: hidden_successor.add(target_id)
+        successors, predecessors, hidden_successor, claimed, claims = self._supersession(snapshot, records, eligible, accepted)
         def heads(key):
             # Ends of the chains that replace this record; a fork gives several, a cycle none.
             found, seen, stack = set(), {key}, sorted(successors.get(key, ()))
@@ -1089,10 +1214,11 @@ class RealmService:
                 if head in mandatory: continue
                 matched.add(head); base[head] = max(base.get(head, 0), scores.get(key, 0))
         # Priors weigh the plain score; neither is a tier. An owner's stated
-        # preference counts for more, imported and not-adopted history for less.
+        # preference (the review page, or an agent relaying the owner's words)
+        # counts for more, imported and not-adopted history for less.
         def prior(key):
             m = records[key]['metadata']; preference = m.get('preference')
-            return (discovery.RecordRanker.PREFERENCE_BOOST if isinstance(preference, dict) and preference.get('stated_by') == 'owner' else 1.0) * (discovery.ARCHIVE_PRIOR if archive(key) else 1.0)
+            return (discovery.RecordRanker.PREFERENCE_BOOST if isinstance(preference, dict) and preference.get('stated_by') in ('owner', 'owner_relayed') else 1.0) * (discovery.ARCHIVE_PRIOR if archive(key) else 1.0)
         def relevance(key): return base.get(key, 0) * prior(key)
         # Equal relevance (always so without a task): current material before archive, then by id.
         def order(key): return (-relevance(key), archive(key), key)

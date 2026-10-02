@@ -33,7 +33,7 @@ class EntrypointTests(unittest.TestCase):
             self.assertNotIn('project-bind', result.stdout)
         result = self.call('--version')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('0.9.0', result.stdout)
+        self.assertIn('0.9.1', result.stdout)
         self.assertIn('record format 0.1', result.stdout)
 
     def test_unbound_entry_creates_only_private_diagnostics_without_knowledge_state(self):

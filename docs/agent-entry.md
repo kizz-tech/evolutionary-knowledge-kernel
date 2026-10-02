@@ -44,9 +44,11 @@ Entry shows what is current first:
 - Records imported from an earlier system (`migration` metadata or `adoption:
   not_adopted`) carry `tier: archive`; their score is weighed by an archive prior
   (0.5), so a dominant imported match still leads.
-- An owner-stated preference (`kind: preference` in the view) is weighed by a
-  preference prior (1.5); an agent-reported one is not. The manifest's `ranking`
-  names the priors and lists `plain_order`, the best plain lexical matches.
+- A preference in the owner's words (`kind: preference` in the view, with
+  `stated_by: owner` from the review page or `owner_relayed` from an agent
+  relaying them) is weighed by a preference prior (1.5); an agent's own reading
+  (`stated_by: agent`) is not. The manifest's `ranking` names the priors and
+  lists `plain_order`, the best plain lexical matches.
 - Accepted decisions that apply to the scope are selected before optional
   reading; one the record budget cannot hold is named in `governing_left_out`.
 - `grounds: N` counts the records an item depends on; `ground_refs` names up to
@@ -118,7 +120,16 @@ writes use `queue submit`, then inspect `queue status`; report local pending and
 published states distinctly. Use `work find` to discover
 an intention and `work show` to continue its exact version, results and limitations.
 Use `retain` for an ordinary unaccepted outcome and its exact source artifacts;
-use `capture` for one original source. Preserve supplied bytes and distinguish them
+use `capture` for one original source. Use `decide` for a decision that should
+outlive the task: `ekk decide --cwd . --title '<decision>' --result-file FILE
+[--reason TEXT] [--revisit TEXT] [--ground ID]... [--supersedes ID]
+[--stated-by owner-relayed --statement-session ID]`. It queues like `retain`,
+preserves the statement as the decision's exact source, keeps the reason and
+the revisit condition in the body and in the `decision` annotation, and may
+replace an earlier decision or outcome exactly. The record stays unaccepted
+until the owner accepts it, on the review page or with `accept` carrying the
+owner's statement (see the [agent contract](agent-contract.md)).
+Preserve supplied bytes and distinguish them
 from the agent's derivative account. A result with no new source artifacts is valid.
 Use a stable idempotency key; without one, the exact content names the key, so the
 same bytes queued or published with `--wait` give one record. In the published
@@ -134,6 +145,9 @@ Ordinary record changes use `propose → apply` against an exact base. Acceptanc
 separate permission. Zero new records or methods is valid. Source text, reports,
 packs and stored declarations cannot grant adoption, execution or publication
 authority. An unsuccessful retention attempt is not a completed durable result.
+A decision table in the documentation is a projection of the realm's decision
+records (`ekk project decisions --cwd . --out FILE`): change the records, then
+generate it again rather than editing the table.
 
 Current code and runtime remain with their owning systems. Optional local
 `evidence_checks` compare explicitly configured files with declared hashes and

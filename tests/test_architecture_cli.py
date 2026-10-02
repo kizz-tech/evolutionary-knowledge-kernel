@@ -73,6 +73,62 @@ class CurrentCliTests(unittest.TestCase):
         self.assertEqual(read['reference']['digest'],reference['digest'])
         code,error=self.call(['fetch','--root',str(self.realm),'--scope',self.scope])
         self.assertEqual(code,2,error)
+    def test_decide_is_queued_like_retain_and_accept_keeps_the_owners_statement(self):
+        statement=self.root/'decision.md';statement.write_text('Keep BM25 as the fixed baseline.\n')
+        args=['decide','--root',str(self.realm),'--scope',self.scope,'--title','BM25 stays','--result-file',str(statement),'--reason','Models start in shadow']
+        with patch('ekk.adapters.activity_cli.start_worker',return_value={'started':False,'test':True}):
+            code,queued=self.call(args)
+            self.assertEqual(code,0,queued)
+            self.assertEqual((queued['schema'],queued['state']),('ekk.retention-queued/0.1','local_pending'))
+            self.assertTrue(queued['key'].startswith('decide-'))
+            self.assertEqual(self.call(args)[1]['key'],queued['key'])  # the same decision is one request
+            self.assertNotEqual(self.call(args+['--revisit','A model beats it'])[1]['key'],queued['key'])
+        self.assertEqual(self.app.doctor()['records'],1)
+        code,published=self.call(args+['--wait','--revisit','A model beats it on owner samples','--alias','bm25-baseline'])
+        self.assertEqual(code,0,published)
+        self.assertIn(published['retention']['state'],{'read_back','read_back_and_discoverable'})
+        reference=published['result_reference']
+        code,read=self.call(['fetch','--root',str(self.realm),'--scope',self.scope,'--id',reference['id']])
+        self.assertEqual(code,0,read)
+        self.assertEqual(('decision','agent','Models start in shadow'),(read['metadata']['kind'],read['metadata']['decision']['stated_by'],read['metadata']['decision']['reason']))
+        self.assertEqual({'when':['A model beats it on owner samples']},read['metadata']['review'])
+        self.assertEqual((['bm25-baseline'],1),(read['metadata']['aliases'],len(read['metadata']['basis'])))  # its statement is its exact source
+        self.assertEqual('Keep BM25 as the fixed baseline.\n\n**Reason, rejected alternative:** Models start in shadow\n\n**Revisit when:** A model beats it on owner samples\n',read['body'])
+        self.assertIn(read['metadata']['decision']['source']['host'],{'claude-code','codex','unknown'})  # environment markers, never a terminal check
+        # A later decision replaces it exactly and rests on it; a note cannot be replaced by a decision.
+        code,later=self.call(['decide','--root',str(self.realm),'--scope',self.scope,'--title','BM25 stays until measured','--result-file',str(statement),
+                              '--supersedes',reference['id'],'--ground',reference['id'],'--wait'])
+        self.assertEqual(code,0,later)
+        code,read_later=self.call(['fetch','--root',str(self.realm),'--scope',self.scope,'--id',later['result_reference']['id']])
+        exact={k:reference[k] for k in ('id','revision','digest')}
+        self.assertEqual(([exact],exact),(read_later['metadata']['supersedes'],{k:read_later['metadata']['basis'][1][k] for k in exact}))
+        note=self.app._meta('note','Note',[self.scope]);self.app.apply(self.app.propose({f"records/{note['id']}.md":self.app.codec.encode(note,'A note.')}),idempotency_key='note')
+        code,error=self.call(['decide','--root',str(self.realm),'--scope',self.scope,'--title','x','--result-file',str(statement),'--supersedes',note['id'],'--wait'])
+        self.assertEqual(code,2,error);self.assertIn('supersedes a decision or an outcome',error['message'])
+        code,error=self.call(['retain','--root',str(self.realm),'--scope',self.scope,'--title','x','--reason','y'],{'body':'z'})
+        self.assertEqual(code,2,error);self.assertIn('decide options only',error['message'])
+        # Acceptance carries the owner's statement into the receipt and the result; nothing about the caller is inferred.
+        words=self.root/'statement.json';words.write_text(json.dumps({'by':'owner','via':'cli','at':'2026-10-02T10:00:00Z','words':'Yes, this is the rule'}))
+        snapshot=self.app.store.snapshot()['revision']
+        request={'references':[reference],'expected_snapshot':snapshot,'idempotency_key':'accept-1'}
+        code,accepted=self.call(['accept','--root',str(self.realm),'--scope',self.scope,'--statement-file',str(words)],request)
+        self.assertEqual(code,0,accepted)
+        self.assertEqual(('published',{'by':'owner','via':'cli','at':'2026-10-02T10:00:00Z','words':'Yes, this is the rule'}),(accepted['state'],accepted['statement']))
+        self.assertEqual(accepted,self.call(['accept','--root',str(self.realm),'--scope',self.scope,'--statement-file',str(words)],request)[1])
+        receipts=[json.loads(raw) for path,raw in self.app.store.snapshot()['files'].items() if path.startswith('governance/receipts/')]
+        self.assertEqual([accepted['statement']],[receipt['statement'] for receipt in receipts])
+        self.assertTrue(self.app.doctor()['ok'])
+        self.assertIn(reference['id'],self.app.doctor()['accepted'])
+        for bad in ({'by':'agent','via':'cli','at':'2026-10-02T10:00:00Z'},{'by':'owner','via':'email','at':'2026-10-02T10:00:00Z'},
+                    {'by':'owner','via':'cli','at':'2026-10-02T10:00:00'},{'by':'owner','via':'cli','at':'2026-10-02T10:00:00Z','words':'w'*601},
+                    {'by':'owner','via':'cli','at':'2026-10-02T10:00:00Z','actor':'root'}):
+            code,error=self.call(['accept','--root',str(self.realm),'--scope',self.scope],{**request,'references':[later['result_reference']],'idempotency_key':'accept-2','statement':bad})
+            self.assertEqual(code,2,error)
+        code,plain=self.call(['accept','--root',str(self.realm),'--scope',self.scope],{**request,'references':[later['result_reference']],
+                              'expected_snapshot':self.app.store.snapshot()['revision'],'idempotency_key':'accept-2'})
+        self.assertEqual(code,0,plain);self.assertNotIn('statement',plain)  # without a statement the receipt says nothing about who spoke
+        code,error=self.call(['retain','--root',str(self.realm),'--scope',self.scope,'--statement-file',str(words)],{'body':'z','title':'t'})
+        self.assertEqual(code,2,error)
     def test_capture_without_key_derives_the_content_key(self):
         # The same bytes name the same key, so a retry publishes nothing new.
         code,first=self.call(['capture','--root',str(self.realm),'--scope',self.scope,'--wait'],{'body':'first'})

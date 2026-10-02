@@ -14,7 +14,9 @@ import yaml
 from .local_profile import LocalProfile, binding, config_home, data_home, trusted_principal, published_manifest
 
 AGENT_VIEW_RECORD_BUDGET=64000
-OPERATIONS={'doctor','context','contexts','search','fetch','read-source','resolve-historical','capture','retain','propose','apply','accept','review','assurance','assess','export','diagnostics','backup','restore'}
+OPERATIONS={'doctor','context','contexts','search','fetch','read-source','resolve-historical','capture','retain','decide','propose','apply','accept','review','assurance','assess','export','diagnostics','backup','restore'}
+DECISION_SCHEMA='ekk.decision/0.1'
+DECISION_STATED_BY=('owner_relayed','agent')  # the same closed set the application validates
 
 
 def service(root, *, realm_id=None, allowed_scopes=None):
@@ -50,7 +52,7 @@ def service(root, *, realm_id=None, allowed_scopes=None):
 
 def parser():
     p=argparse.ArgumentParser(prog='ekk',description='Personal work entry, shared continuity and revisable methods. Start with enter --task; methods: ekk method --help')
-    p.add_argument('operation',choices=sorted(OPERATIONS|{'init','enter','recover'}))
+    p.add_argument('operation',choices=sorted(OPERATIONS|{'init','enter','recover'}),help='Also: ekk observe …, ekk method …, ekk project decisions (documents generated from records)')
     p.add_argument('--root',type=Path)
     p.add_argument('--profile',default=os.environ.get('EKK_PROFILE'))
     p.add_argument('--realm',help='Alias in the active role profile')
@@ -64,7 +66,15 @@ def parser():
     p.add_argument('--budget',type=int,default=16000)
     p.add_argument('--compact',action='store_true',help='enter/context: short agent view, same as --brief; assess: compact summary; ignored elsewhere')
     p.add_argument('--brief',action='store_true',help='enter/context: short agent view with exact references; required reading stays complete; ignored elsewhere')
-    p.add_argument('--wait',action='store_true',help='retain: publish and verify read-back before returning; by default the request is queued and published in the background')
+    p.add_argument('--wait',action='store_true',help='retain/decide: publish and verify read-back before returning; by default the request is queued and published in the background')
+    p.add_argument('--reason',help='decide: the reason and the rejected alternative')
+    p.add_argument('--revisit',help='decide: the condition under which the decision is reconsidered')
+    p.add_argument('--supersedes',help='decide: ID of the decision or outcome this one replaces (its current version, exactly)')
+    p.add_argument('--ground',action='append',default=[],help='decide: ID of a record the decision rests on (repeatable; current version, exactly)')
+    p.add_argument('--alias',action='append',default=[],help='decide: a name the decision is also known by (repeatable)')
+    p.add_argument('--stated-by',choices=['owner-relayed','agent'],help='decide: who stated the decision; an agent by default, or an agent relaying the owner\'s words')
+    p.add_argument('--statement-session',help='decide: host session ID in which the owner spoke')
+    p.add_argument('--statement-file',type=Path,help='accept: JSON statement of the owner behind the acceptance (by, via, at, optional host, session, words)')
     p.add_argument('--action',help='Owner-configured named assessment; assess only, without a JSON request')
     p.add_argument('--expected-head',help='Full Git commit for a named assessment; defaults to freshly observed HEAD')
     p.add_argument('--file',type=Path)
@@ -94,7 +104,7 @@ def current_reference(app, scopes, ids):
 
 
 def retention_payload(artifacts, *, title, body, expected_snapshot=None, repository_evidence=None,
-                      experience=None, preference=None, supersedes=None):
+                      experience=None, preference=None, supersedes=None, decision=None, basis=None, aliases=None):
     if len(artifacts)>32:raise ValueError('retain accepts at most 32 source artifacts')
     if not isinstance(title,str) or not title or not isinstance(body,str) or not body.strip():
         raise ValueError('retain requires a title and a nonempty result body')
@@ -105,7 +115,7 @@ def retention_payload(artifacts, *, title, body, expected_snapshot=None, reposit
         for item in artifacts]}
     if repository_evidence is not None:payload['repository_evidence']=repository_evidence
     if expected_snapshot is not None:payload['expected_snapshot']=expected_snapshot
-    for name,value in (('experience',experience),('preference',preference),('supersedes',supersedes)):
+    for name,value in (('experience',experience),('preference',preference),('supersedes',supersedes),('decision',decision),('basis',basis),('aliases',aliases)):
         if value is not None:payload[name]=value
     return payload
 
@@ -126,14 +136,16 @@ def content_key(operation, realm_id, scopes, payload):
 
 
 def queue_retention(args, app, scopes, artifacts, *, title, body, key, expected_snapshot=None, repository_evidence=None,
-                    experience=None, preference=None, supersedes=None):
+                    experience=None, preference=None, supersedes=None, decision=None, basis=None, aliases=None):
     """Durable local retention request with a background publisher.
 
     Publication, read-back and discoverability are confirmed later by the queue;
-    this result never claims them.
+    this result never claims them. A decision travels as a retention request
+    with the ``decision``, ``basis`` and ``aliases`` fields.
     """
     payload=retention_payload(artifacts,title=title,body=body,expected_snapshot=expected_snapshot,
-                              repository_evidence=repository_evidence,experience=experience,preference=preference,supersedes=supersedes)
+                              repository_evidence=repository_evidence,experience=experience,preference=preference,supersedes=supersedes,
+                              decision=decision,basis=basis,aliases=aliases)
     return queue_write(args,app,scopes,'retain',payload,key)
 
 
@@ -272,12 +284,18 @@ def dispatch(args, request, *, render=None):
             note_stage('response')
             render(result)
         return result
+    # The journal names registered operations; a decision is published as a retention request.
     return observed_call(args.operation, run, realm_id=realm_id, key=key)
 
 
 def _dispatch(args, request):
     if args.operation != 'assess' and (args.action is not None or args.expected_head is not None):
         raise ValueError('--action and --expected-head are assess options only')
+    if args.operation != 'decide' and (args.reason is not None or args.revisit is not None or args.supersedes is not None or args.ground or args.alias
+                                       or args.stated_by is not None or args.statement_session is not None):
+        raise ValueError('--reason, --revisit, --supersedes, --ground, --alias, --stated-by and --statement-session are decide options only')
+    if args.operation != 'accept' and args.statement_file is not None:
+        raise ValueError('--statement-file is an accept option only')
     from .operation_diagnostics import note_stage
     note_stage('request')
     op=args.operation
@@ -380,8 +398,10 @@ def _dispatch(args, request):
                 source_sha256=request.get('source_sha256'), containing_path=request.get('containing_path'),
                 selector=request.get('selector'))
         elif op=='accept':
+            # The owner's statement is the only provenance recorded; who runs the command is not inferred.
+            statement=json.loads(args.statement_file.read_text(encoding='utf-8'),parse_constant=_invalid_json_constant) if args.statement_file else request.get('statement')
             result=app.accept_records(scopes,request['references'],expected_snapshot=request['expected_snapshot'],
-                idempotency_key=args.idempotency_key or request['idempotency_key'])
+                idempotency_key=args.idempotency_key or request['idempotency_key'],statement=statement)
         elif op=='doctor':result=app.doctor(revision=args.revision)
         elif op=='review':result=app.review(scopes)
         elif op=='assurance':result=app.assurance(scopes)
@@ -422,6 +442,41 @@ def _dispatch(args, request):
                 result = queue_retention(args, app, scopes, artifacts, title=args.title or request.get('title', ''),
                     body=body, key=key, expected_snapshot=expected,
                     repository_evidence=request.get('repository_evidence'))
+        elif op=='decide':
+            # A decision is a retention request with a decision annotation: queued by
+            # default, published through the ordinary route, unaccepted until the owner says so.
+            note_stage('request')
+            from datetime import datetime, timezone
+            from .observe_hook import host_of
+            from .retention import retain_once
+            statement=args.result_file.read_text(encoding='utf-8') if args.result_file else request.get('body','')
+            title=args.title or request.get('title','')
+            stated_by=args.stated_by or request.get('stated_by') or 'agent'
+            if not isinstance(stated_by,str) or stated_by.replace('-','_') not in DECISION_STATED_BY:raise ValueError('stated_by must be owner-relayed or agent')
+            stated_by=stated_by.replace('-','_')
+            session=args.statement_session or request.get('statement_session')
+            if session is not None and not isinstance(session,str):raise ValueError('statement_session must be text')
+            if stated_by=='owner_relayed' and not session:raise ValueError('A relayed statement names the host session the owner spoke in (--statement-session)')
+            # The host comes from its environment markers, never from a terminal check; the day is the content's date.
+            decision={'schema':DECISION_SCHEMA,'stated_by':stated_by,
+                      'source':{'host':host_of({})[0],**({'session':session} if session else {}),'at':datetime.now(timezone.utc).strftime('%Y-%m-%d')}}
+            for name in ('reason','revisit'):
+                value=getattr(args,name) or request.get(name)
+                if value is not None:decision[name]=value
+            def exact(ids):
+                return [{k:current_reference(app,scopes,[i])[k] for k in ('id','revision','digest')} for i in ids]
+            supersedes=exact([args.supersedes]) if args.supersedes else request.get('supersedes')
+            basis=exact(args.ground) if args.ground else request.get('basis')
+            aliases=list(args.alias) if args.alias else request.get('aliases')
+            key=args.idempotency_key or request.get('idempotency_key') or request.get('request_id')
+            key=key or content_key('decide',manifest['id'],scopes,retention_payload([],title=title,body=statement,expected_snapshot=expected,
+                                                                                decision=decision,supersedes=supersedes,basis=basis,aliases=aliases))
+            if args.wait:
+                result=retain_once(app,[],title=title,body=statement,scopes=scopes,key=key,expected_snapshot=expected,
+                                   decision=decision,supersedes=supersedes,basis=basis,aliases=aliases)
+            else:
+                result=queue_retention(args,app,scopes,[],title=title,body=statement,key=key,expected_snapshot=expected,
+                                       decision=decision,supersedes=supersedes,basis=basis,aliases=aliases)
         elif op=='propose':
             note_stage('request')
             changes={}

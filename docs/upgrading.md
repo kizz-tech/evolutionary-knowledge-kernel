@@ -8,7 +8,7 @@ validated. Python 3.11 or later is required.
 
 ```sh
 python3 -m venv /absolute/path/to/ekk-0.9
-/absolute/path/to/ekk-0.9/bin/pip install /absolute/path/to/evolutionary_knowledge_kernel-0.9.0-py3-none-any.whl
+/absolute/path/to/ekk-0.9/bin/pip install /absolute/path/to/evolutionary_knowledge_kernel-0.9.1-py3-none-any.whl
 /absolute/path/to/ekk-0.9/bin/pip check
 /absolute/path/to/ekk-0.9/bin/ekk --version
 ```
@@ -92,6 +92,22 @@ inert. 0.9.0 adds two private directories that can be deleted at any time:
 `<data home>/observed` (the event spool and observer state) and
 `<cache home>/observed/cards` (session cards). `ekk observe off` stops observation;
 `ekk observe status` shows what was captured.
+
+## 0.9.1: provenance, decisions and the hourly run
+
+`ekk observe prefer --reported-by-agent` is gone. A preference recorded from the
+command line now says who stated it: `--stated-by agent` (the default, the
+agent's own reading) or `--stated-by owner-relayed --statement-session ID` (an
+agent relaying the owner's words from a host session). Only the weekly review
+page records `owner`; a preference recorded from a terminal no longer reaches
+session cards by itself. `--owner-wide` writes to the owner's personal realm and
+needs a profile and a realm alias named `personal` in the local registry.
+
+`ekk decide` records a decision as an unaccepted record; `ekk accept` takes
+`--statement-file` with the owner's word; `ekk project decisions` renders a
+realm's decision records as a table. `ekk observe install --host launchd`
+registers an optional hourly observer run (`ekk observe uninstall --host
+launchd` removes it); it reads the same private observer directory as the hooks.
 
 See [release validation](release-validation.md) for the exact versions and checks
 actually exercised. Mechanism tests do not establish external outcomes or benefit.

@@ -175,7 +175,13 @@ def capture_once(app, data, *, title, scopes, filename, key, expected_snapshot=N
 
 
 def retain_once(app, artifacts, *, title, body, scopes, key, expected_snapshot=None, repository_evidence=None,
-                experience=None, preference=None, supersedes=None):
+                experience=None, preference=None, supersedes=None, decision=None, basis=None, aliases=None):
+    """Publish one retained result once under ``key``.
+
+    With ``decision`` the request is a decision: ``body`` is its statement, and
+    the application composes the record (RealmService.decide) with the exact
+    grounds ``basis`` and the ``aliases``; the queue carries the same fields.
+    """
     if not isinstance(artifacts, list) or len(artifacts) > 32:
         raise ValueError('retain accepts at most 32 source artifacts')
     for artifact in artifacts:
@@ -187,13 +193,18 @@ def retain_once(app, artifacts, *, title, body, scopes, key, expected_snapshot=N
         value = [identity, 'retain', title, body, scopes, sources, expected_snapshot]
         if repository_evidence is not None: value = [*value, repository_evidence]
         # Appended only when present, so earlier request journals keep their digests.
-        extras = {name: item for name, item in (('experience', experience), ('preference', preference), ('supersedes', supersedes)) if item is not None}
+        extras = {name: item for name, item in (('experience', experience), ('preference', preference), ('supersedes', supersedes),
+                                                ('decision', decision), ('basis', basis), ('aliases', aliases)) if item is not None}
         return [*value, extras] if extras else value
+    def build():
+        if decision is not None:
+            return app.decide(body, title=title, scope=scopes, decision=decision, supersedes=supersedes, basis=basis,
+                              aliases=aliases, artifacts=artifacts)
+        if basis is not None or aliases is not None: raise ValueError('grounds and aliases belong to a decision')
+        return app.retain(artifacts, title=title, body=body, scope=scopes, repository_evidence=repository_evidence,
+                          experience=experience, preference=preference, supersedes=supersedes)
     from .operation_diagnostics import observed_call
     realm = app.codec.load_yaml(app.store.snapshot()['files']['.ekk/realm.yaml'])['id']
-    return observed_call('retain', lambda: _once(app, operation='retain', fingerprint=fingerprint,
-                 build=lambda: app.retain(artifacts, title=title, body=body, scope=scopes,
-                                         repository_evidence=repository_evidence, experience=experience,
-                                         preference=preference, supersedes=supersedes),
+    return observed_call('retain', lambda: _once(app, operation='retain', fingerprint=fingerprint, build=build,
                  scopes=scopes, key=key, expected_snapshot=expected_snapshot),
                  realm_id=realm, principal=app.principal, key=key)

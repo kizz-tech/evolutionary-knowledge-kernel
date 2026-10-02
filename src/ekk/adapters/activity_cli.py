@@ -99,7 +99,7 @@ def publish(request, key):
     operation=request['operation'];payload=dict(request['request'])
     if operation=='retain':
         from .retention import retain_once
-        if set(payload)-{'title','body','artifacts','repository_evidence','expected_snapshot','experience','preference','supersedes'}:raise ValueError('Unsupported retention fields')
+        if set(payload)-{'title','body','artifacts','repository_evidence','expected_snapshot','experience','preference','supersedes','decision','basis','aliases'}:raise ValueError('Unsupported retention fields')
         artifacts=[]
         for item in payload.get('artifacts',[]):
             if not isinstance(item,dict) or set(item)-{'body','base64','filename','title'} or ('body' in item)==('base64' in item):raise ValueError('Exact artifact body or base64 required')
@@ -107,10 +107,11 @@ def publish(request, key):
             artifacts.append({'data':raw,**{k:v for k,v in item.items() if k in ('filename','title')}})
         receipt=retain_once(app,artifacts,title=payload.get('title',''),body=payload.get('body',''),scopes=scopes,key=key,
                           expected_snapshot=payload.get('expected_snapshot'),repository_evidence=payload.get('repository_evidence'),
-                          experience=payload.get('experience'),preference=payload.get('preference'),supersedes=payload.get('supersedes'))
+                          experience=payload.get('experience'),preference=payload.get('preference'),supersedes=payload.get('supersedes'),
+                          decision=payload.get('decision'),basis=payload.get('basis'),aliases=payload.get('aliases'))
         # The next session in this project is told about the result it has just gained.
         from .experience import card_after_publication
-        card_after_publication(args.cwd,args.profile)
+        card_after_publication(args.cwd)
         return receipt
     if operation=='capture':
         from .retention import capture_once

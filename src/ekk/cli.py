@@ -16,6 +16,9 @@ def main(argv=None):
     if argv and argv[0] == 'method':
         from .adapters.method_cli import main as method_main
         return method_main(argv[1:])
+    if argv and argv[0] == 'project':
+        from .adapters.projection_cli import main as project_main
+        return project_main(argv[1:])
     if argv == ['--version']:
         from . import __version__
         print(f'EKK {__version__} (record format 0.1)')
