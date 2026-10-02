@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from ekk.adapters.git_store import GitStore
-from ekk.model import Conflict, DirtyWorkingTree, IdempotencyConflict, RecoveryConflict, ValidationError, validate_envelope
+from ekk.model import Conflict, DirtyWorkingTree, IdempotencyConflict, RecoveryConflict, StoreError, ValidationError, validate_envelope
 
 
 class GitStoreTests(unittest.TestCase):
@@ -158,6 +158,184 @@ store.apply({'records/a.md': b'two'}, base=sys.argv[2], idempotency_key='exit', 
                 git.reset_mock()
                 self.apply(store, base=base, changes={"records/0.md": b"updated"})
                 self.assertLess(git.call_count, 55)
+
+    def test_published_reads_reuse_immutable_git_facts(self):
+        from unittest.mock import patch
+        current = self.apply()["revision"]
+        with patch.object(self.store, "_git", wraps=self.store._git) as git:
+            first = self.store.snapshot()
+            git.reset_mock()
+            # The head comes from its loose ref file and the commit from memory.
+            again = self.store.snapshot()
+            self.assertEqual(first, again)
+            self.assertEqual(0, git.call_count)
+            again["files"]["records/a.md"] = b"changed by a caller"
+            self.assertEqual(b"two", self.store.snapshot()["files"]["records/a.md"])
+            # History and ancestry come from one rev-list per head.
+            self.assertEqual([current, self.base], self.store.history())
+            self.assertEqual(b"one", self.store.snapshot(self.base)["files"]["records/a.md"])
+            calls = git.call_count
+            self.store.snapshot(self.base)
+            self.store.history()
+            self.assertEqual(calls, git.call_count)
+        with self.assertRaises(StoreError):
+            self.store.snapshot("0" * 40)
+        # A packed ref falls back to Git and resolves to the same head.
+        self.store._git("pack-refs", "--all")
+        self.assertFalse((self.path / ".git/refs/ekk/published").exists())
+        self.assertEqual(current, self.store.snapshot()["revision"])
+
+    def test_writes_verify_new_operations_and_explicit_recovery_audits_all(self):
+        from unittest.mock import patch
+        import json
+        first = self.apply()
+        second = self.apply(key="second", base=first["revision"], changes={"records/b.md": b"b"})
+        store = GitStore(self.path)  # a later process
+        with patch.object(GitStore, "_read_evidence", autospec=True, side_effect=GitStore._read_evidence) as evidence:
+            third = self.apply(store, key="third", base=second["revision"], changes={"records/c.md": b"c"})
+            # Earlier passes verified the first two operations; only "second",
+            # completed after the last pass, is verified by this write.
+            self.assertEqual(1, evidence.call_count)
+            self.assertEqual(third, self.apply(store, key="third", base=second["revision"], changes={"records/c.md": b"c"}))
+            evidence.reset_mock()
+            self.assertEqual([], store.recover())
+            self.assertEqual(4, evidence.call_count)
+            # A different verifier or a changed journal is not trusted.
+            evidence.reset_mock()
+            with patch.object(GitStore, "_verifier", return_value="0" * 64):
+                self.apply(GitStore(self.path), key="fourth", base=third["revision"], changes={"records/d.md": b"d"})
+            self.assertEqual(4, evidence.call_count)
+        journal = next(p for p in (self.runtime / "journals").glob("*.json")
+                       if json.loads(p.read_text())["revision"] == first["revision"])
+        forged = json.loads(journal.read_text())
+        forged["receipt"]["principal"] = "other"
+        journal.write_text(json.dumps(forged, sort_keys=True))
+        with self.assertRaises(RecoveryConflict):
+            self.apply(GitStore(self.path), key="fifth", base=self.store.snapshot()["revision"], changes={"records/e.md": b"e"})
+
+    def checkpoint(self):
+        import json
+        path = self.runtime / "verified-operations.json"
+        return json.loads(path.read_text()) if path.exists() else None
+
+    def test_checkpoint_row_cannot_vouch_for_a_rewritten_journal(self):
+        import json
+        from ekk.model import digest
+        receipt = self.apply()
+        kwargs = dict(base=self.base, idempotency_key="change", principal="owner", policy_digest="a" * 64)
+        self.assertEqual(receipt, self.store.lookup({"records/a.md": b"two"}, **kwargs))
+        key = digest(b"change")
+        self.assertIn(key, self.checkpoint()["operations"])
+        # Only runtime files change: the journal names another request and
+        # principal, and its checkpoint row is rewritten to match it.
+        path = self.runtime / "journals" / (key + ".json")
+        journal = json.loads(path.read_text())
+        request = self.store._request({"never-published.txt": b"forged"}, self.base, "intruder", "a" * 64)
+        journal["request"], journal["request_digest"] = request, digest(json.dumps(request, sort_keys=True).encode())
+        journal["receipt"]["principal"] = "intruder"
+        path.write_text(json.dumps(journal, sort_keys=True))
+        checkpoint = self.checkpoint()
+        checkpoint["operations"][key]["journal"] = digest(path.read_bytes())
+        (self.runtime / "verified-operations.json").write_text(json.dumps(checkpoint, sort_keys=True))
+        forged = dict(kwargs, principal="intruder")
+        for store in (self.store, GitStore(self.path)):
+            with self.assertRaises(RecoveryConflict):
+                store.lookup({"never-published.txt": b"forged"}, **forged)
+            with self.assertRaises(RecoveryConflict):
+                store.apply({"never-published.txt": b"forged"}, **forged)
+            with self.assertRaises(RecoveryConflict):
+                self.apply(store, key="later", base=receipt["revision"], changes={"records/b.md": b"b"})
+        self.assertEqual(receipt["revision"], self.store.snapshot()["revision"])
+
+    def test_failed_full_audit_removes_the_checkpoint_until_recovery_passes(self):
+        first = self.apply(changes={"records/a.md": None, "records/b.md": b"b"})
+        second = self.apply(key="second", base=first["revision"], changes={"records/c.md": b"c"})
+        self.assertEqual([], self.store.recover())
+        self.assertEqual(2 + 1, len(self.checkpoint()["operations"]))
+        self.assertFalse(self.store.audit_due())
+        # A blob that exists only in history becomes unreadable.
+        oid = self.store._git("rev-parse", self.base + ":records/a.md").stdout.decode().strip()
+        loose = self.path / ".git/objects" / oid[:2] / oid[2:]
+        original = loose.read_bytes()
+        loose.chmod(0o644)
+        loose.write_bytes(b"corrupt loose object")
+        with self.assertRaises(RecoveryConflict):
+            self.store.recover()
+        self.assertIsNone(self.checkpoint())
+        self.assertTrue(self.store.audit_due())
+        # Without a checkpoint a write audits everything and refuses, in every process.
+        for store in (self.store, GitStore(self.path)):
+            with self.assertRaises(RecoveryConflict):
+                self.apply(store, key="third", base=second["revision"], changes={"records/d.md": b"d"})
+            self.assertIsNone(self.checkpoint())
+        self.assertEqual(second["revision"], self.store.snapshot()["revision"])
+        loose.write_bytes(original)
+        self.assertEqual([], self.store.recover())
+        self.assertFalse(self.store.audit_due())
+        self.apply(key="third", base=second["revision"], changes={"records/d.md": b"d"})
+
+    def test_audit_is_due_without_a_recent_full_audit_by_this_verifier(self):
+        import json
+        from datetime import datetime, timedelta, timezone
+        from unittest.mock import patch
+        fresh = GitStore(Path(self.temp.name) / "unused", Path(self.temp.name) / "unused-runtime")
+        self.assertTrue(fresh.audit_due())
+        first = self.apply()
+        audited = self.checkpoint()["audited_at"]
+        self.assertFalse(self.store.audit_due())
+        self.assertTrue(self.store.audit_due(days=0))
+        # A write extends the checkpoint without claiming a new full audit.
+        self.apply(key="second", base=first["revision"], changes={"records/b.md": b"b"})
+        self.apply(key="third", base=self.store.snapshot()["revision"], changes={"records/c.md": b"c"})
+        self.assertEqual(audited, self.checkpoint()["audited_at"])
+        self.assertEqual(3, len(self.checkpoint()["operations"]))
+        checkpoint = self.checkpoint()
+        checkpoint["audited_at"] = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
+        (self.runtime / "verified-operations.json").write_text(json.dumps(checkpoint))
+        self.assertTrue(self.store.audit_due())
+        self.assertFalse(self.store.audit_due(days=30))
+        self.assertEqual([], self.store.recover())
+        self.assertFalse(self.store.audit_due())
+        self.assertEqual(4, len(self.checkpoint()["operations"]))
+        with patch.object(GitStore, "_verifier", return_value="0" * 64):
+            self.assertTrue(GitStore(self.path).audit_due())
+        # An external edit is not an evidence failure: the audit result stands.
+        (self.path / "records/a.md").write_bytes(b"human")
+        with self.assertRaises(DirtyWorkingTree):
+            self.store.recover()
+        self.assertFalse(self.store.audit_due())
+        self.assertEqual(4, len(self.checkpoint()["operations"]))
+
+    def test_write_starts_a_bounded_number_of_git_processes_independent_of_history(self):
+        from unittest.mock import patch
+        counts = {}
+        for operations in (3, 14):
+            with tempfile.TemporaryDirectory() as temp:
+                store = GitStore(Path(temp) / "realm", Path(temp) / "runtime")
+                base = store.initialize({"records/a.md": b"one"})["revision"]
+                for n in range(operations):
+                    base = self.apply(store, key=str(n), base=base, changes={f"records/{n}.md": b"n"})["revision"]
+                later = GitStore(store.path)  # a later process: no memo of this history is assumed
+                with patch.object(later, "_git", wraps=later._git) as git:
+                    self.apply(later, key="measured", base=base, changes={"records/new.md": b"new"})
+                    counts[operations] = git.call_count
+                    batches = [call for call in git.call_args_list if call.args[:2] == ("cat-file", "--batch")]
+                # Every operation journal is compared with its evidence in one batch.
+                self.assertEqual(operations + 1, batches[0].kwargs["data"].count(b":operation.json\n"))
+        self.assertEqual(counts[3], counts[14])
+        self.assertLess(counts[14], 40)
+
+    def test_replay_reports_publication_without_checking_the_working_tree(self):
+        receipt = self.apply()
+        kwargs = dict(base=self.base, idempotency_key="change", principal="owner", policy_digest="a" * 64)
+        (self.path / ".gitignore").write_bytes(b"edited outside EKK\n")
+        self.assertEqual(receipt, self.apply())
+        self.assertEqual(receipt, self.store.lookup({"records/a.md": b"two"}, **kwargs))
+        with self.assertRaises(DirtyWorkingTree):
+            self.apply(key="new", base=receipt["revision"], changes={"records/b.md": b"b"})
+        with self.assertRaises(DirtyWorkingTree):
+            self.store.recover()
+        self.assertEqual(b"edited outside EKK\n", (self.path / ".gitignore").read_bytes())
 
     def test_large_batch_input_and_binary_output_complete_without_pipe_deadlock(self):
         script = """

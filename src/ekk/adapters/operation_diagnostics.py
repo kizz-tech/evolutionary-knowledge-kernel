@@ -5,11 +5,13 @@ from dataclasses import dataclass, field
 import hashlib
 import os
 from pathlib import Path
+import re
 
 from .local_profile import config_home, data_home, read_yaml, trusted_principal
 from .operation_journal import OperationJournal, TrustedCallerProfile
 
 _ACTIVE = ContextVar('ekk_operation_diagnostic', default=None)
+_ENVIRONMENT_NAME = re.compile(r'[A-Za-z_][A-Za-z0-9_]{0,63}\Z')
 _WARNING = 'Operation diagnostics are incomplete; the returned application result remains authoritative.'
 
 
@@ -28,11 +30,26 @@ def trusted_caller(profile_id=None):
     if not isinstance(adapters, list) or any(not isinstance(item, str) for item in adapters):
         raise ValueError('Caller adapters must be registered identifiers')
     for item in adapters: TrustedCallerProfile(item)
+    environments = config.get('environments', {})
+    if not isinstance(environments, dict) or any(
+            not isinstance(markers, dict) or not markers or any(
+                not isinstance(name, str) or not _ENVIRONMENT_NAME.fullmatch(name)
+                or not isinstance(value, str) or not 0 < len(value) <= 256
+                for name, value in markers.items())
+            for markers in environments.values()):
+        raise ValueError('Caller environments must map registered identifiers to environment markers')
+    for item in environments: TrustedCallerProfile(item)
     if profile_id is not None:
         return TrustedCallerProfile(profile_id) if profile_id in adapters else None
     home = os.environ.get('CODEX_HOME')
+    if not home:
+        # Other coding agents are recognised by markers their host sets for every
+        # command. Several matches stay unknown rather than guessing.
+        matches = [item for item, markers in environments.items()
+                   if all(os.environ.get(name) == value for name, value in markers.items())]
+        return TrustedCallerProfile(matches[0]) if len(matches) == 1 else None
     fleet_path = config.get('codex_profile_fleet')
-    if not home or not fleet_path:
+    if not fleet_path:
         return None
     fleet = read_yaml(Path(fleet_path).expanduser())
     if not isinstance(fleet, dict) or fleet.get('schema_version') != 'lifeos.codex-profile-fleet/1' or not isinstance(fleet.get('profiles'), dict):

@@ -7,11 +7,13 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import shlex
 import sys
 import uuid
 import yaml
 from .local_profile import LocalProfile, binding, config_home, data_home, trusted_principal, published_manifest
 
+AGENT_VIEW_RECORD_BUDGET=64000
 OPERATIONS={'doctor','context','contexts','search','fetch','read-source','resolve-historical','capture','retain','propose','apply','accept','review','assurance','assess','export','diagnostics','backup','restore'}
 
 
@@ -38,7 +40,10 @@ def service(root, *, realm_id=None, allowed_scopes=None):
     else:storage=GitStore(root,runtime_dir=data_home()/key)
     from .local_profile import cache_home
     from .discovery_index import DiscoveryIndex
-    app=RealmService(storage,principal=trusted_principal(),codec=MarkdownCodec(cache_dir=cache_home()/'parsed'/key),allowed_scopes=allowed_scopes,pack_loader=PackDirectory(pack_directory()),discovery_index=DiscoveryIndex(cache_home()/'discovery'/key))
+    from .history_index import HistoryIndex
+    # Task-term query weights (experience_store.TaskTerms) are measured but not applied:
+    # on real tasks they did not improve known-item recall over plain BM25.
+    app=RealmService(storage,principal=trusted_principal(),codec=MarkdownCodec(cache_dir=cache_home()/'parsed'/key),allowed_scopes=allowed_scopes,pack_loader=PackDirectory(pack_directory()),discovery_index=DiscoveryIndex(cache_home()/'discovery'/key),history_index=HistoryIndex(cache_home()/'history'/key))
     app.initial_realm_id=identity
     return app
 
@@ -57,8 +62,9 @@ def parser():
     p.add_argument('--personal',action='store_true',help='Include explicitly configured personal home on enter')
     p.add_argument('--resume',help='Exact JSON reference with realm, id, revision and digest on enter')
     p.add_argument('--budget',type=int,default=16000)
-    p.add_argument('--compact',action='store_true',help='Compact enter/context display or assessment summary; preserves evidence identities')
-    p.add_argument('--brief',action='store_true',help='Progressive context display; required reading remains explicit')
+    p.add_argument('--compact',action='store_true',help='enter/context: short agent view, same as --brief; assess: compact summary; ignored elsewhere')
+    p.add_argument('--brief',action='store_true',help='enter/context: short agent view with exact references; required reading stays complete; ignored elsewhere')
+    p.add_argument('--wait',action='store_true',help='retain: publish and verify read-back before returning; by default the request is queued and published in the background')
     p.add_argument('--action',help='Owner-configured named assessment; assess only, without a JSON request')
     p.add_argument('--expected-head',help='Full Git commit for a named assessment; defaults to freshly observed HEAD')
     p.add_argument('--file',type=Path)
@@ -76,6 +82,138 @@ def parser():
     p.add_argument('--revision')
     p.add_argument('--workspace',action='store_true')
     return p
+
+
+def current_reference(app, scopes, ids):
+    """Exact reference to the current version of one record named with --id."""
+    if len(ids)!=1:raise ValueError('Give one --id or a JSON request with an exact reference')
+    _,realm,_,records=app._query_view(scopes)
+    row=records.get(ids[0])
+    if row is None:raise KeyError('Record unavailable in selected contexts: '+ids[0])
+    return {'realm':realm['id'],'id':ids[0],'revision':row['metadata']['revision'],'digest':'sha256:'+row['digest']}
+
+
+def retention_payload(artifacts, *, title, body, expected_snapshot=None, repository_evidence=None,
+                      experience=None, preference=None, supersedes=None):
+    if len(artifacts)>32:raise ValueError('retain accepts at most 32 source artifacts')
+    if not isinstance(title,str) or not title or not isinstance(body,str) or not body.strip():
+        raise ValueError('retain requires a title and a nonempty result body')
+    if repository_evidence is not None and not isinstance(repository_evidence,dict):
+        raise ValueError('repository evidence must be a recorded declaration')
+    payload={'title':title,'body':body,'artifacts':[
+        {'base64':base64.b64encode(item['data']).decode(),**{k:item[k] for k in ('filename','title') if k in item}}
+        for item in artifacts]}
+    if repository_evidence is not None:payload['repository_evidence']=repository_evidence
+    if expected_snapshot is not None:payload['expected_snapshot']=expected_snapshot
+    for name,value in (('experience',experience),('preference',preference),('supersedes',supersedes)):
+        if value is not None:payload[name]=value
+    return payload
+
+
+def capture_payload(data, *, title, filename, expected_snapshot=None):
+    if not isinstance(data,bytes) or not data:raise ValueError('capture requires nonempty source bytes')
+    if not isinstance(title,str) or not title or not isinstance(filename,str) or not filename:
+        raise ValueError('capture requires a title and a filename')
+    payload={'title':title,'filename':filename,'base64':base64.b64encode(data).decode()}
+    if expected_snapshot is not None:payload['expected_snapshot']=expected_snapshot
+    return payload
+
+
+def content_key(operation, realm_id, scopes, payload):
+    """The key of a write that was given none: identical content yields the same
+    key, queued or synchronous, so a retry cannot create a second result."""
+    return operation+'-'+hashlib.sha256(json.dumps([realm_id,sorted(scopes),payload],sort_keys=True,ensure_ascii=False).encode()).hexdigest()[:40]
+
+
+def queue_retention(args, app, scopes, artifacts, *, title, body, key, expected_snapshot=None, repository_evidence=None,
+                    experience=None, preference=None, supersedes=None):
+    """Durable local retention request with a background publisher.
+
+    Publication, read-back and discoverability are confirmed later by the queue;
+    this result never claims them.
+    """
+    payload=retention_payload(artifacts,title=title,body=body,expected_snapshot=expected_snapshot,
+                              repository_evidence=repository_evidence,experience=experience,preference=preference,supersedes=supersedes)
+    return queue_write(args,app,scopes,'retain',payload,key)
+
+
+def queue_capture(args, app, scopes, data, *, title, filename, key, expected_snapshot=None):
+    """Durable local request to preserve one original source; published in the background."""
+    return queue_write(args,app,scopes,'capture',capture_payload(data,title=title,filename=filename,expected_snapshot=expected_snapshot),key)
+
+
+def queue_write(args, app, scopes, operation, payload, key):
+    from .activity_cli import authorize_controls, local_store, route_document, start_worker
+    realm=authorize_controls(app,scopes,write=True)
+    key=key or content_key(operation,realm['id'],scopes,payload)
+    frozen={'route':route_document(args,realm['id'],scopes),'operation':operation,'request':payload}
+    store=local_store(app,realm['id'])
+    try:
+        try:queued=store.enqueue(key,frozen,scopes)
+        except ValueError as exc:
+            if 'exceeds' in str(exc):raise ValueError(str(exc)+'; publish a source of this size with --wait') from exc
+            raise
+        row=queued['operations'][0] if queued['operations'] else {'state':'local_pending'}
+        if row['state']=='read_back_and_discoverable':
+            worker={'started':False,'meaning':'This key is already published and verified.'}
+        else:
+            try:worker=start_worker(argparse.Namespace(**{**vars(args),'state_dir':None}),store)
+            except OSError as exc:worker={'started':False,'error':str(exc),'next':'Run ekk queue drain with the same route; the request is already durable.'}
+    finally:store.close()
+    route=' '.join(['--cwd',shlex.quote(str(args.cwd))]+(['--profile',shlex.quote(args.profile)] if getattr(args,'_explicit_profile',False) else [])
+                   +(['--realm',shlex.quote(args.realm)] if args.realm else [])+(['--root',shlex.quote(str(args.root))] if args.root else [])
+                   +[part for scope in args.scope for part in ('--scope',shlex.quote(scope))])
+    meaning=('Already published and verified under this key.' if row['state']=='read_back_and_discoverable' else
+             'Durable local request. Publication, read-back and discoverability are not confirmed yet; '
+             'report it as pending until queue status shows read_back_and_discoverable. Use --wait to publish now.')
+    return {'schema':'ekk.retention-queued/0.1','key':key,'state':row['state'],'worker':worker,
+            'check':'ekk queue status '+route+' --key '+shlex.quote(key),'meaning':meaning}
+
+
+def note_delivery(args, result, brief):
+    """Remember privately what entry showed for a task and what plain lexical order
+    would have shown: the basis of owner samples and of the use signal. Only inside a
+    bound, observed project; never affects the entry itself."""
+    try:
+        if args.operation!='enter':return
+        from .experience_store import ExperienceStore
+        from .observe_hook import switched_off, workspace_of
+        from ..application.discovery import content_terms
+        from .. import observation
+        workspace=None if switched_off() else workspace_of(args.cwd)
+        if workspace is None:return
+        federated=str(brief.get('schema','')).startswith('ekk.federated-brief/')
+        pairs=list(zip(result.get('contexts',[]),brief.get('contexts',[]))) if federated else [(result,brief)]
+        store=None
+        try:
+            for full,short in pairs:
+                if not str(short.get('schema','')).startswith('ekk.context-brief/') or not short.get('task'):continue
+                task=observation.single_line(observation.redact(str(short['task'])[:observation.MAX_TASK_CHARS*4]),observation.MAX_TASK_CHARS)
+                # Pinned items appear for every task; they are kept for the use signal, not for relevance samples.
+                items=[{'id':(item.get('ref') or {}).get('id') or item.get('id'),'title':item.get('title'),'kind':item.get('kind'),
+                        **({k:item['ref'].get(k) for k in ('revision','digest')} if item.get('ref') else {'pinned':True})}
+                       for item in short.get('items',[]) if (item.get('ref') or {}).get('id') or item.get('id')]
+                plain=((full.get('manifest') or {}).get('ranking') or {}).get('plain_order') or []
+                store=store or ExperienceStore()
+                store.note_delivery(workspace=str(workspace),realm=short.get('realm'),task=task,
+                                    snapshot=json.dumps(short.get('snapshot')),items=items,
+                                    baseline=[{k:row[k] for k in ('id','title','kind','revision','digest') if k in row} for row in plain if isinstance(row,dict) and row.get('id')])
+                store.observe_task(short.get('realm'),content_terms(task),task)
+        finally:
+            if store is not None:store.close()
+    except Exception:pass
+
+
+def note_use(args, result, record_id):
+    """A listed record opened by ID soon after entry counts as used."""
+    try:
+        from .experience_store import ExperienceStore
+        from .observe_hook import switched_off, workspace_of
+        if not record_id or switched_off() or workspace_of(args.cwd) is None:return
+        store=ExperienceStore()
+        try:store.note_use((result.get('reference') or {}).get('realm'),record_id)
+        finally:store.close()
+    except Exception:pass
 
 
 def _invalid_json_constant(value):
@@ -230,10 +368,12 @@ def _dispatch(args, request):
                 expected_snapshot=request.get('expected_snapshot'),
                 source_byte_limit=request.get('source_byte_limit',1048576),match=request.get('match','all'))
         elif op=='fetch':
-            result=app.fetch_record(scopes,request['reference'],max_bytes=request.get('max_bytes',131072))
+            result=app.fetch_record(scopes,request.get('reference') or current_reference(app,scopes,args.id),max_bytes=request.get('max_bytes',131072))
+            note_use(args,result,(result.get('reference') or {}).get('id'))
         elif op=='read-source':
-            result=app.read_source(scopes,request['reference'],asset_index=request.get('asset_index',0),
+            result=app.read_source(scopes,request.get('reference') or current_reference(app,scopes,args.id),asset_index=request.get('asset_index',0),
                 offset=request.get('offset',0),limit=request.get('limit',65536),selector=request.get('selector'))
+            note_use(args,result,(result.get('reference') or {}).get('id'))
         elif op=='resolve-historical':
             result=app.resolve_historical(scopes, migration_id=request['migration_id'], origin=request['origin'],
                 path=request.get('path'), legacy_id=request.get('legacy_id'),
@@ -252,8 +392,12 @@ def _dispatch(args, request):
             else:
                 data=request.get('body','').encode();filename=request.get('filename','original.md')
             key=args.idempotency_key or request.get('idempotency_key') or request.get('request_id')
-            if not isinstance(key,str) or not key:raise ValueError('capture requires an idempotency key or request_id')
-            result=capture_once(app,data,title=args.title or request.get('title','Source'),scopes=scopes,filename=filename,key=key,expected_snapshot=expected)
+            if args.wait:
+                key=key or content_key('capture',manifest['id'],scopes,capture_payload(data,title=args.title or request.get('title','Source'),filename=filename,expected_snapshot=expected))
+                result=capture_once(app,data,title=args.title or request.get('title','Source'),scopes=scopes,filename=filename,key=key,expected_snapshot=expected)
+            else:
+                # Queue the exact bytes durably and return; publication runs in the background.
+                result=queue_capture(args,app,scopes,data,title=args.title or request.get('title','Source'),filename=filename,key=key,expected_snapshot=expected)
         elif op=='retain':
             note_stage('request')
             from .retention import retain_once
@@ -267,9 +411,17 @@ def _dispatch(args, request):
                 artifacts.append({'data':data, **{k:v for k,v in item.items() if k in {'filename','title'}}})
             body = args.result_file.read_text(encoding='utf-8') if args.result_file else request.get('body', '')
             key = args.idempotency_key or request.get('idempotency_key') or request.get('request_id')
-            result = retain_once(app, artifacts, title=args.title or request.get('title', ''),
-                body=body, scopes=scopes, key=key, expected_snapshot=expected,
-                repository_evidence=request.get('repository_evidence'))
+            if args.wait:
+                key = key or content_key('retain', manifest['id'], scopes, retention_payload(
+                    artifacts, title=args.title or request.get('title', ''), body=body, expected_snapshot=expected,
+                    repository_evidence=request.get('repository_evidence')))
+                result = retain_once(app, artifacts, title=args.title or request.get('title', ''),
+                    body=body, scopes=scopes, key=key, expected_snapshot=expected,
+                    repository_evidence=request.get('repository_evidence'))
+            else:
+                result = queue_retention(args, app, scopes, artifacts, title=args.title or request.get('title', ''),
+                    body=body, key=key, expected_snapshot=expected,
+                    repository_evidence=request.get('repository_evidence'))
         elif op=='propose':
             note_stage('request')
             changes={}
@@ -427,29 +579,27 @@ def main(argv=None):
     args=parser().parse_args(argv);request={};common=False
     try:
         request=_input(args);common=_common_request(request)
-        if args.brief and (args.compact or args.operation not in {'enter','context'}):
-            raise ValueError('--brief supports enter/context and cannot be combined with --compact')
-        if args.compact and (args.operation not in {'enter','context','assess'}
-                or (args.operation != 'assess' and (args.json or args.stdin))):
-            raise ValueError('--compact supports enter/context command options and assess only')
+        # Display flags only change presentation; other operations ignore them.
+        agent_view=args.operation in {'enter','context'} and (args.brief or args.compact)
+        if agent_view and not any(arg=='--budget' or str(arg).startswith('--budget=') for arg in (sys.argv[1:] if argv is None else argv)):
+            # The agent view summarizes selected records, so selection is not
+            # starved by a few large pinned ones; the display has its own target.
+            args.budget=AGENT_VIEW_RECORD_BUDGET
         if common:
             if 'request_id' in request and (not isinstance(request['request_id'],str) or not request['request_id']):raise ValueError('request_id must be nonempty text')
             if 'operation' in request and request['operation']!=args.operation:raise ValueError('Request operation differs from CLI operation')
         emitted_warnings=[]
         def render(result):
             output=result_envelope(request,args.operation,result) if common else result
-            if args.brief:
+            if agent_view:
                 from .context_display import brief_context
                 brief=brief_context(result)
+                note_delivery(args,result,brief)
                 output=result_envelope(request,args.operation,brief) if common else brief
-            if args.compact:
-                if args.operation == 'assess':
-                    from .coding_assessment import compact_assessment
-                    compact = compact_assessment(result)
-                    output = result_envelope(request,args.operation,compact) if common else compact
-                else:
-                    from .context_display import compact_context
-                    output=compact_context(result)
+            elif args.compact and args.operation == 'assess':
+                from .coding_assessment import compact_assessment
+                compact = compact_assessment(result)
+                output = result_envelope(request,args.operation,compact) if common else compact
             print(json.dumps(output,ensure_ascii=False,indent=2,default=str))
             if isinstance(result, dict):emitted_warnings.extend(result.get('warnings', []))
         result=dispatch(args,request,render=render)

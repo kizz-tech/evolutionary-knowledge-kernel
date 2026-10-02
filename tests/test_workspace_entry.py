@@ -11,8 +11,16 @@ from ekk.application.workspace import WorkspaceService, exact_reference
 from ekk.adapters.local_profile import LocalProfile
 from ekk.adapters.command_line import dispatch, parser
 
+def isolate(test):
+    """CLI dispatch journals every call; keep it out of the owner's EKK state."""
+    home=tempfile.TemporaryDirectory();test.addCleanup(home.cleanup)
+    env=patch.dict(os.environ,{'EKK_DATA_HOME':home.name+'/data','EKK_CONFIG_HOME':home.name+'/config','EKK_CACHE_HOME':home.name+'/cache'})
+    env.start();test.addCleanup(env.stop)
+    for marker in ('CODEX_HOME','CLAUDECODE'):os.environ.pop(marker,None)
+
 class WorkspaceEntryTests(unittest.TestCase):
     def setUp(self):
+        isolate(self)
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name).resolve()
         self.store=GitStore(self.root/'realm',self.root/'runtime')
@@ -118,6 +126,90 @@ class WorkspaceEntryTests(unittest.TestCase):
         self.assertTrue(result['manifest']['incomplete'])
         self.assertIn('initial publication is not identified', result['warnings'][0])
 
+    def test_history_index_resolves_like_a_full_historical_load(self):
+        from unittest.mock import patch
+        from ekk.adapters.history_index import HistoryIndex
+        self.add('basis', 'Original evidence.')
+        old = self.add('subject', 'Original subject.', depends_on=['basis'])
+        self.add('subject', 'New subject.', revision=2, depends_on=['basis'])
+        self.add('basis', 'New evidence.', revision=2)
+        unindexed = self.app.context(['scope'], task='unmatched', focus=[old])
+        def indexed():
+            return RealmService(self.store, 'owner', lambda: '2026-09-07T12:00:00Z', codec=self.codec,
+                                history_index=HistoryIndex(self.root / 'history'))
+        first = indexed()
+        self.assertEqual(unindexed, first.context(['scope'], task='unmatched', focus=[old]))
+        # A later process resolves the pinned version without loading any past commit.
+        later = indexed()
+        current = later._load(self.store.snapshot())[-1]
+        loaded = []
+        original = RealmService._load
+        def counting(service, snapshot, *, historical=False):
+            loaded.append(snapshot['revision'])
+            return original(service, snapshot, historical=historical)
+        with patch.object(RealmService, '_load', counting):
+            target = later._reference(old, current)
+        self.assertEqual([], loaded)
+        self.assertEqual(target, self.app._reference(old, self.app._load(self.store.snapshot())[-1]))
+        self.assertEqual(unindexed, later.context(['scope'], task='unmatched', focus=[old]))
+
+    def test_record_versions_follow_removal_and_recreation(self):
+        from ekk.adapters.history_index import HistoryIndex
+        first = self.add('subject', 'First.')
+        second = self.add('subject', 'Second.', revision=2)
+        self.add('other', 'Other.')
+        path = self.app._load(self.store.snapshot())[-1]['subject']['path']
+        self.app.apply(self.app.propose({path: None}), idempotency_key='remove')
+        services = [RealmService(self.store, 'owner', lambda: '2026-09-07T12:00:00Z', codec=self.codec, **options)
+                    for options in ({}, {'history_index': HistoryIndex(self.root / 'history')})]
+        for service in services:
+            current = service._load(self.store.snapshot())[-1]
+            self.assertNotIn('subject', current)
+            for ref, body in ((first, 'First.'), (second, 'Second.')):
+                self.assertEqual(body, service._reference(ref, current)['body'].strip())
+            self.assertEqual(services[0]._reference(second, current), service._reference(second, current))
+            # A removed ID continues its history: the next revision is 3.
+            stale = dict(schema='ekk.record/0.1', id='subject', title='subject', kind='note', scope=['scope'],
+                         revision=1, created_at='2026-09-07T10:00:00Z', created_by='owner')
+            with self.assertRaises(ValueError) as caught:
+                service.apply(service.propose({'records/subject.md': self.codec.encode(stale, 'Again.')}), idempotency_key='stale')
+            self.assertIn('recreated ID requires next historical revision', str(caught.exception))
+        versions = services[1]._record_versions()
+        self.assertEqual([1, 2], [row[0] for _, _, row in versions.ranges['subject']])
+        self.assertFalse(versions.broken)
+        services[1].apply(services[1].propose({'records/subject.md': self.codec.encode({**stale, 'revision': 3}, 'Again.')}), idempotency_key='again')
+        self.assertEqual('Again.', self.app._load(self.store.snapshot())[-1]['subject']['body'].strip())
+
+    def test_history_index_fingerprint_follows_the_loader_and_nothing_else(self):
+        from ekk.adapters import history_index
+        fingerprint = history_index.loader_fingerprint()
+        self.assertEqual(fingerprint, history_index.loader_fingerprint())
+        # Ranking, entry and every other method of the service leave the index warm.
+        def context(self, scopes, **options): return 'another ranking'
+        def apply(self, proposal, **options): return 'another write path'
+        with patch.object(RealmService, 'context', context), patch.object(RealmService, 'apply', apply):
+            self.assertEqual(fingerprint, history_index.loader_fingerprint())
+        # What decides whether and how a historical commit loads makes it cold.
+        original = RealmService._load
+        def _load(self, snapshot, *, historical=False): return original(self, snapshot, historical=historical)
+        with patch.object(RealmService, '_load', _load):
+            self.assertNotEqual(fingerprint, history_index.loader_fingerprint())
+        with patch.object(RealmService, '_roots', staticmethod(lambda realm: realm.get('storage', {}))):
+            self.assertNotEqual(fingerprint, history_index.loader_fingerprint())
+        read = Path.read_bytes
+        for module in ('model/methods.py', 'model/__init__.py', 'adapters/markdown.py'):
+            def edited(path, module=module):
+                return read(path) + (b'\n# changed rule\n' if path.as_posix().endswith('ekk/' + module) else b'')
+            with self.subTest(module=module), patch.object(Path, 'read_bytes', edited):
+                self.assertNotEqual(fingerprint, history_index.loader_fingerprint())
+        for library in ('jsonschema', 'rfc3339-validator'):
+            versions = lambda name, library=library: 'other' if name == library else 'same'
+            with self.subTest(library=library), patch.object(history_index, '_distribution_version', versions):
+                with_other = history_index.loader_fingerprint()
+            with patch.object(history_index, '_distribution_version', lambda name: 'same'):
+                self.assertNotEqual(with_other, history_index.loader_fingerprint())
+        self.assertEqual(fingerprint, history_index.loader_fingerprint())
+
     def test_alias_search_returns_all_readable_ids_and_rename_keeps_identity(self):
         first = self.add('first', 'body', aliases=['unique-alias'])
         second = self.add('second', 'body', aliases=['unique-alias'])
@@ -163,6 +255,9 @@ class WorkspaceEntryTests(unittest.TestCase):
             self.assertEqual([r['owner_projection'] for r in result['contexts']],['shared','personal'])
 
 class WorkspaceOptionTests(unittest.TestCase):
+    def setUp(self):
+        isolate(self)
+
     def test_resume_and_personal_options_fail_before_mutation(self):
         for options in [['init','--personal'],['enter','--resume','null'],['enter','--resume','']]:
             args=parser().parse_args(options)

@@ -339,6 +339,91 @@ class ContainedGitStoreTests(unittest.TestCase):
             self.restore_copy(copy, runtime)
         self.assertFalse(runtime.exists())
 
+    def test_write_starts_a_bounded_number_of_git_processes_independent_of_history(self):
+        from unittest.mock import patch
+        counts = {}
+        base, done = self.base, 0
+        for operations in (3, 12):
+            for n in range(done, operations):
+                base = self.apply({f"note-{n}.md": b"n"}, base=base, key=str(n))["revision"]
+            done = operations
+            later = self.make_store()  # a later process
+            with patch.object(later, "_git", wraps=later._git) as git:
+                base = later.apply({f"measured-{operations}.md": b"new"}, base=base, idempotency_key=f"measured-{operations}",
+                                   principal="owner", policy_digest=digest(b"policy-v1"))["revision"]
+                counts[operations] = git.call_count
+            done += 1
+        self.assertEqual(counts[3], counts[12])
+
+    def test_corrupt_historical_blob_fails_the_audit_and_then_every_write(self):
+        first = self.apply({"note.md": None, "other.md": b"other"})
+        self.assertEqual([], self.store.recover())
+        checkpoint = self.runtime / "verified-operations.json"
+        self.assertTrue(checkpoint.exists())
+        oid = self.git("rev-parse", self.base + ":knowledge/note.md").decode().strip()
+        loose = self.repo / ".git/objects" / oid[:2] / oid[2:]
+        original = loose.read_bytes()
+        loose.chmod(0o644)
+        loose.write_bytes(b"corrupt loose object")
+        with self.assertRaises(RecoveryConflict):
+            self.store.recover()
+        self.assertFalse(checkpoint.exists())
+        with self.assertRaises(RecoveryConflict):
+            self.apply({"third.md": b"third"}, base=first["revision"], key="third")
+        self.assertEqual(first["revision"], self.git("rev-parse", "HEAD").decode().strip())
+        loose.write_bytes(original)
+        self.assertEqual([], self.store.recover())
+        self.apply({"third.md": b"third"}, base=first["revision"], key="third")
+
+
+class ContainedRealmHistoryHorizonTests(unittest.TestCase):
+    """Pins a known limitation; see docs/daily-reliability.md."""
+
+    def test_outer_commit_without_the_realm_blocks_every_new_record(self):
+        from ekk.adapters.history_index import HistoryIndex
+        from ekk.adapters.markdown import MarkdownCodec
+        from ekk.application import RealmService
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name).resolve()
+        codec = MarkdownCodec()
+        seed = GitStore(root / "seed", root / "seed-runtime")
+        RealmService(seed, "owner", lambda: "2026-09-07T12:00:00Z", codec=codec).init("Realm", context_id="scope")
+        repo = root / "repo"
+        repo.mkdir()
+
+        def git(*args):
+            return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True).stdout
+        git("init", "--quiet", "--initial-branch=main")
+        git("config", "user.name", "Test")
+        git("config", "user.email", "test@localhost")
+        # The project has a commit from before the realm was placed in it.
+        (repo / "code.py").write_bytes(b"code\n")
+        git("add", ".")
+        git("commit", "--quiet", "-m", "Code only")
+        for name, raw in seed.snapshot()["files"].items():
+            target = repo / "knowledge" / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(raw)
+        git("add", ".")
+        git("commit", "--quiet", "-m", "Add realm")
+        for number, options in enumerate(({}, {"history_index": HistoryIndex(root / "history")})):
+            store = ContainedGitStore(repo / "knowledge", repo, "refs/heads/main", root / "runtime")
+            app = RealmService(store, "owner", lambda: "2026-09-07T12:00:00Z", codec=codec, **options)
+            self.assertEqual(2, len(store.history()))
+            # Reading the current realm works.
+            self.assertEqual(1, len(app._load(store.snapshot())[-1]))
+            metadata = dict(schema="ekk.record/0.1", id=f"note-{number}", title="Note", kind="note", scope=["scope"],
+                            revision=1, created_at="2026-09-07T10:00:00Z", created_by="owner")
+            proposal = app.propose({f"records/note-{number}.md": codec.encode(metadata, "Body.")})
+            # The new-ID check loads every outer commit as a realm; the first has none.
+            with self.assertRaises(KeyError) as caught:
+                app.apply(proposal, idempotency_key=f"note-{number}")
+            self.assertEqual(".ekk/realm.yaml", caught.exception.args[0])
+            if options:
+                self.assertEqual({store.history()[-1]}, app._record_versions().broken)
+            self.assertEqual(2, len(store.history()))
+
 
 if __name__ == "__main__":
     unittest.main()

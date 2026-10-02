@@ -113,10 +113,14 @@ class LocalOperationTests(unittest.TestCase):
         task=self.store.task(['scope'],'create',{'key':'new','title':'Follow up','external':{'owner':'tracker','locator':'issue:12'}})
         waiting=self.store.task(['scope'],'wait',{'id':task['id'],'revision':1,'key':'wait','until':'2026-10-01T10:00:00+03:00'})
         self.assertEqual(waiting['wait']['registration'],'not_registered')
-        attempt=self.store.task(['scope'],'external-attempt',{'id':task['id'],'revision':2,'key':'attempt','operation_key':'send:1'})
+        for host in ('cron',['claude-code']):
+            with self.assertRaises(ValueError):self.store.task(['scope'],'register-wait',{'id':task['id'],'revision':2,'key':'receipt-'+str(host),'host_receipt':{'host':host,'automation_id':'job-1','receipt':'Scheduled'}})
+        registered=self.store.task(['scope'],'register-wait',{'id':task['id'],'revision':2,'key':'receipt','host_receipt':{'host':'claude-code','automation_id':'job-1','receipt':'Scheduled task job-1'}})
+        self.assertEqual((registered['wait']['registration'],registered['wait']['host_receipt']['host']),('receipt_recorded','claude-code'))
+        attempt=self.store.task(['scope'],'external-attempt',{'id':task['id'],'revision':3,'key':'attempt','operation_key':'send:1'})
         self.assertEqual(attempt['external_action']['state'],'unknown')
-        with self.assertRaises(ValueError):self.store.task(['scope'],'external-attempt',{'id':task['id'],'revision':3,'key':'attempt2','operation_key':'send:2'})
-        reconciled=self.store.task(['scope'],'external-outcome',{'id':task['id'],'revision':3,'key':'reconcile','operation_key':'send:1','outcome':'confirmed','evidence':'Owner system receipt #1'})
+        with self.assertRaises(ValueError):self.store.task(['scope'],'external-attempt',{'id':task['id'],'revision':4,'key':'attempt2','operation_key':'send:2'})
+        reconciled=self.store.task(['scope'],'external-outcome',{'id':task['id'],'revision':4,'key':'reconcile','operation_key':'send:1','outcome':'confirmed','evidence':'Owner system receipt #1'})
         self.assertEqual(reconciled['external_action']['state'],'confirmed')
         with self.assertRaises(Conflict):self.store.task(['scope'],'update',{'id':task['id'],'revision':1,'key':'old','status':'completed'})
 
@@ -164,7 +168,8 @@ class LocalOperationTests(unittest.TestCase):
                 'manifest':{'realm_id':'realm:test','snapshots':[],'incomplete':False,'omitted':[]}}
         brief=brief_context(result,budget=3000)
         self.assertEqual(brief['required_reading'][0]['body'],'exact restriction')
-        self.assertTrue(brief['material'][0]['full_read_required_for_use'])
+        self.assertEqual(brief['items'][0]['ref']['id'],'note')
+        self.assertLessEqual(len(brief['items'][0]['summary']),600)
 
     def test_disposable_cache_can_close_on_gateway_transport_thread(self):
         import threading

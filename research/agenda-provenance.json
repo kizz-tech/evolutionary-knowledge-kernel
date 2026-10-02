@@ -45,8 +45,9 @@
         "belief-reviewed-synthesis"
       ],
       "path": "ROADMAP.md",
-      "sha256": "0924dfcc1950bfc5ef0cfe9a2ea8f219b0932dcf969638effb66c0eb93b4c916",
-      "treatment": "new_proposed_plan"
+      "sha256": "00df7dd7f855389f14d9ee8a53f67795cb88e97a45b001b4c187a9be99c73b2c",
+      "treatment": "new_proposed_plan",
+      "note": "Revised with the 0.8 increment (installed working tree) and republished with 0.9.0; the earlier hash identified the 0.7.0 edition."
     },
     {
       "path": "research/studies/action-readiness/README.md",

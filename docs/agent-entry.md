@@ -1,7 +1,11 @@
-# Agent entry for EKK 0.8
+# Agent entry
+
+The [agent contract](agent-contract.md) is all an agent needs for ordinary work;
+hosts with EKK hooks hand it to the agent at session start. This page is the
+reference behind it.
 
 Use existing local context first. A small edit with sufficient context needs no
-EKK call or retained record. For a design edit, start with the owning component,
+EKK call. For a design edit, start with the owning component,
 tokens and style guide. Enter or search only for missing context, a consequential
 decision or work that needs continuity. Reuse valid evidence until relevant inputs
 change. See [continuous work](continuous-work.md) only when that operation is needed.
@@ -21,19 +25,49 @@ authorized work without retention. A denied route does not permit an administrat
 
 Entry returns available commitments, questions, results and exact continuation
 references. Inspect `blocked`, `incomplete`, conflicts, unknowns and omitted records.
-The projection grants no external execution authority. `--compact` changes display,
-not canonical bytes or acceptance. Follow exact references with `fetch` and
-`read-source` when the underlying evidence matters.
+The projection grants no external execution authority. `--brief` and `--compact`
+print one short agent view (`ekk.context-brief/0.3`): required reading in full,
+then other selected records with the record's own opening paragraph, the reason
+they were selected and an exact reference. Because the view summarizes, it selects
+with a 64 kB record budget instead of the default 16 kB, so it can list records
+the full projection omits; pass `--budget` to select identically. Neither flag
+changes canonical bytes or acceptance.
+
+Entry shows what is current first:
+
+- A record that another current record supersedes is replaced by its successor,
+  which carries `replaces`. A superseded record that must still be shown (a pinned
+  or resumed version, a ground) carries `superseded_by`, and its successor is
+  selected with it. An unaccepted record cannot replace an accepted one: its link
+  is a claim, shown as `replacement_claimed_by` on the accepted record and
+  `claims_to_replace` on the claimant, which is selected only by its own match.
+- Records imported from an earlier system (`migration` metadata or `adoption:
+  not_adopted`) carry `tier: archive`; their score is weighed by an archive prior
+  (0.5), so a dominant imported match still leads.
+- An owner-stated preference (`kind: preference` in the view) is weighed by a
+  preference prior (1.5); an agent-reported one is not. The manifest's `ranking`
+  names the priors and lists `plain_order`, the best plain lexical matches.
+- Accepted decisions that apply to the scope are selected before optional
+  reading; one the record budget cannot hold is named in `governing_left_out`.
+- `grounds: N` counts the records an item depends on; `ground_refs` names up to
+  three of them by ID and title so they can be fetched.
+- `incomplete` is true only when something required is unresolved;
+  `incomplete_reasons` also says when optional reading was left out. `next` lists
+  the follow-up command forms.
+
+Follow a listed record with `fetch --id ID` or `read-source --id ID` when the
+underlying evidence matters.
 
 For a bound project, keep the same `--cwd` on follow-up reads so they reuse its
 profile and allowed contexts:
 
 ```sh
-ekk fetch --cwd /path/to/project --json /path/to/reference-request.json
-ekk read-source --cwd /path/to/project --json /path/to/source-request.json
+ekk fetch --cwd /path/to/project --id RECORD_ID
+ekk read-source --cwd /path/to/project --id RECORD_ID
 ```
 
-The fetch request is `{"reference": {"realm": "REALM_ID", "id": "RECORD_ID",
+`--id` reads the current version. An exact or historical version uses a JSON
+request (`--json FILE`). The fetch request is `{"reference": {"realm": "REALM_ID", "id": "RECORD_ID",
 "revision": 1, "digest": "sha256:EXACT_DIGEST"}}`. Copy those four fields from
 the returned reference. A source request uses the exact source descriptor's
 reference plus `"asset_index": 0` (or its returned asset index); follow
@@ -70,15 +104,26 @@ realm and check the actual receipt. Repeated reporting and routine completion do
 not themselves require a record. The parent
 integrator includes useful delegated findings in that result. If retention remains
 unresolved, report that specific limit; if there is no new material, no record is
-needed. There is no compulsory reflection or automatic transcript capture.
-For an asynchronous durable write use `queue submit`, then inspect `queue status`;
-report local pending and published states distinctly. Use `work find` to discover
+needed. There is no compulsory reflection and no transcript capture. On a host
+with EKK hooks, the final reports of a session that changed the repository, was
+corrected by the owner or produced a substantial result are recorded as one
+unaccepted outcome without any action by the agent; see the
+[agent contract](agent-contract.md).
+`retain` and `capture` are asynchronous by default: each queues the exact request
+durably, starts the background publisher and returns `state: local_pending` with a
+key. Report it
+as pending until `queue status --key KEY` shows `read_back_and_discoverable`; add
+`--wait` only when the next step needs the published receipt. For other durable
+writes use `queue submit`, then inspect `queue status`; report local pending and
+published states distinctly. Use `work find` to discover
 an intention and `work show` to continue its exact version, results and limitations.
 Use `retain` for an ordinary unaccepted outcome and its exact source artifacts;
 use `capture` for one original source. Preserve supplied bytes and distinguish them
 from the agent's derivative account. A result with no new source artifacts is valid.
-Use a stable idempotency key and check the returned `retention.state`, exact
-`source_references`, `result_reference`, readback and discovery. Publication with
+Use a stable idempotency key; without one, the exact content names the key, so the
+same bytes queued or published with `--wait` give one record. In the published
+receipt (from `--wait` or `queue status`), check `retention.state`, exact `source_references`, `result_reference`,
+readback and discovery. Publication with
 pending verification must be reported as such. After an uncertain response, retry
 the identical request and key. Never invent a new key to bypass uncertainty.
 Keep the frozen request separate from later report annotations. A `lock_busy`

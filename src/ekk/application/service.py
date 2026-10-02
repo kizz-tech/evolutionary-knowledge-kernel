@@ -11,15 +11,32 @@ from ekk.model import Conflict, validate_envelope, validate_reference, digest, n
 
 CONTROL = ('.ekk/realm.yaml', '.ekk/governance.yaml', '.ekk/packs.lock.yaml')
 KINDS = {'context','note','source','observation','claim','question','decision','policy','action','outcome'}
-CONTEXT_SOURCE_SCAN_BYTES = 8 * 1048576
+
+class RecordVersions:
+    """Which version of each record every published commit holds."""
+    def __init__(self):
+        self.seq={}      # commit -> position, oldest first
+        self.ranges={}   # record ID -> [(first position, last position, [revision, digest, path])]
+        self.broken=set()
+
+    def at(self, revision, record_id):
+        position=self.seq[revision]
+        for first,last,row in self.ranges.get(record_id,()):
+            if first<=position<=last:return row
+        return None
+
 
 class RealmService:
-    def __init__(self, store, principal, clock=None, *, codec, pack_loader=None, allowed_scopes=None, discovery_index=None):
+    def __init__(self, store, principal, clock=None, *, codec, pack_loader=None, allowed_scopes=None, discovery_index=None, history_index=None, task_terms=None):
         if not isinstance(principal, str) or not principal:
             raise ValueError('trusted principal required')
         self.store, self.principal, self.clock, self.codec = store, principal, clock, codec
         self.pack_loader = pack_loader
         self.discovery_index = discovery_index
+        self.history_index = history_index
+        # Optional port: weight(stem) in (0, 1] lowers task-framing words in entry ranking.
+        self.task_terms = task_terms
+        self._versions = None
         self._loaded_views = OrderedDict()
         self._resolved_references = OrderedDict()
         self.allowed_scopes=None if allowed_scopes is None else frozenset(allowed_scopes)
@@ -127,14 +144,72 @@ class RealmService:
         if item.get('snapshot') and item['snapshot'] not in history:raise ValueError('reference snapshot is outside the historical horizon')
         revisions=[item['snapshot']] if item.get('snapshot') else history if item.get('digest') or item.get('revision') else []
         for revision in revisions:
-            historic=self._load(self.store.snapshot(revision),historical=True)[-1]
-            target=historic.get(item['id'])
-            if matches(target):
+            target=self._historical_target(revision,item['id'],matches)
+            if target is not None:
                 if as_of:
                     self._resolved_references[cache_key]=deepcopy(target)
                     while len(self._resolved_references)>2048:self._resolved_references.popitem(last=False)
                 return target
         raise ValueError('unresolved reference: '+item['id'])
+
+    def _historical_target(self, revision, record_id, matches):
+        """The matching record of one historical commit, as its full historical load gives it.
+
+        With an index, a commit already loaded once in full (and therefore valid)
+        is not loaded again: only the matching record is decoded from its bytes.
+        """
+        versions=self._record_versions() if self.history_index is not None else None
+        if versions is None or revision in versions.broken or revision not in versions.seq:
+            target=self._load(self.store.snapshot(revision),historical=True)[-1].get(record_id)
+            return target if matches(target) else None
+        located=versions.at(revision,record_id)
+        if not located or not matches({'digest':located[1],'metadata':{'revision':located[0]}}):return None
+        raw=self._file_at(revision,located[2])
+        if digest(raw)!=located[1]:
+            target=self._load(self.store.snapshot(revision),historical=True)[-1].get(record_id)
+            return target if matches(target) else None
+        record=self.codec.decode(raw,allow_aliases=revision!=self.store.history()[0])
+        self.codec.validate_schema('record',record['metadata'])
+        m=validate_envelope(record['metadata'])
+        return {**record,'metadata':m,'path':located[2],'digest':located[1],'snapshot_revision':revision}
+
+    def _record_versions(self):
+        """Record versions along published history, from one validated load per commit.
+
+        Each commit contributes the records it changed or removed relative to the
+        commit before it. A commit that cannot be loaded is marked and is always
+        read again by its caller, so its error is reported as before.
+        """
+        history=self.store.history()
+        if self._versions is not None and self._versions[0]==history[0]:return self._versions[1]
+        versions=RecordVersions();state={};opened={};against=None
+        def close(rid,last):
+            versions.ranges.setdefault(rid,[]).append((opened.pop(rid),last,state.pop(rid)))
+        for position,revision in enumerate(reversed(history)):
+            versions.seq[revision]=position
+            allow_aliases=revision!=history[0]
+            delta=self.history_index.delta(revision,against,allow_aliases)
+            if delta is None:
+                try:records=self._load(self.store.snapshot(revision),historical=True)[-1]
+                except Exception:
+                    versions.broken.add(revision)
+                    continue
+                full={rid:[r['metadata']['revision'],r['digest'],r['path']] for rid,r in records.items()}
+                delta={'changed':{rid:row for rid,row in full.items() if state.get(rid)!=row},'removed':[rid for rid in state if rid not in full]}
+                self.history_index.put_delta(revision,against,allow_aliases,delta)
+            for rid in delta['removed']:
+                if rid in state:close(rid,position-1)
+            for rid,row in delta['changed'].items():
+                if rid in state:close(rid,position-1)
+                state[rid]=row;opened[rid]=position
+            against=revision
+        for rid in list(state):close(rid,len(history)-1)
+        self._versions=(history[0],versions)
+        return versions
+
+    def _file_at(self, revision, path):
+        reader=getattr(self.store,'file_at',None)
+        return reader(revision,path) if reader else self.store.snapshot(revision)['files'][path]
 
     def _relation_ref(self, relation):
         ref={'id':relation['target']}
@@ -192,8 +267,7 @@ class RealmService:
             if not receipt.get('base') or not receipt.get('authority_basis'):
                 self._unverified_receipts.append({'id':receipt['record_id'],'reason':'receipt structure valid; actor and policy acceptance unverified by this runtime'})
                 continue
-            historical = self.store.snapshot(receipt['base'])
-            policy_raw = historical['files'][CONTROL[1]]
+            policy_raw = self._file_at(receipt['base'], CONTROL[1])
             if digest(policy_raw) != receipt.get('governance_sha256'): raise ValueError('receipt policy digest mismatch')
             policy = self.codec.load_yaml(policy_raw,allow_aliases=receipt['base']!=self.store.history()[0])
             if receipt.get('policy_version') != policy.get('version',1): raise ValueError('receipt policy version mismatch')
@@ -429,8 +503,7 @@ class RealmService:
             raise PermissionError('reference belongs to another realm')
         row = self._reference(reference, records)
         self._query_readable(row, records, policy, scopes)
-        original = snapshot if row['snapshot_revision'] == snapshot['revision'] else self.store.snapshot(row['snapshot_revision'])
-        raw = original['files'][row['path']]
+        raw = snapshot['files'][row['path']] if row['snapshot_revision'] == snapshot['revision'] else self._file_at(row['snapshot_revision'], row['path'])
         if digest(raw) != row['digest']:
             raise ValueError('record bytes digest mismatch')
         if len(raw) > max_bytes:
@@ -462,8 +535,7 @@ class RealmService:
         if asset_index >= len(assets):
             raise ValueError('source asset unavailable; external URIs are not fetched')
         asset = assets[asset_index]
-        original = snapshot if row['snapshot_revision'] == snapshot['revision'] else self.store.snapshot(row['snapshot_revision'])
-        raw = original['files'][asset['path']]
+        raw = snapshot['files'][asset['path']] if row['snapshot_revision'] == snapshot['revision'] else self._file_at(row['snapshot_revision'], asset['path'])
         if digest(raw) != asset['sha256']:
             raise ValueError('source bytes digest mismatch')
         from .historical_address import source_selection
@@ -546,8 +618,8 @@ class RealmService:
                 asset = row['metadata']['source']['assets'][index]
                 if asset['sha256'] != address.get('sha256') or asset['path'] != entry['asset_path']:
                     continue
-                original = snapshot if row['snapshot_revision'] == snapshot['revision'] else self.store.snapshot(row['snapshot_revision'])
-                if digest(original['files'][asset['path']]) != asset['sha256']:
+                raw = snapshot['files'][asset['path']] if row['snapshot_revision'] == snapshot['revision'] else self._file_at(row['snapshot_revision'], asset['path'])
+                if digest(raw) != asset['sha256']:
                     continue
                 candidate = {'reference': ref, 'asset_index': index, 'asset': asset,
                              'origin': address, 'selector': selector, 'title': row['metadata']['title']}
@@ -652,8 +724,13 @@ class RealmService:
         root='records' if 'records' in roots['record_roots'] else roots['record_roots'][0]
         return {path:data,f"{root}/{m['id']}.md":self.codec.encode(m)}
 
-    def retain(self, artifacts, *, title, body, scope, repository_evidence=None):
-        """Prepare exact sources and one discoverable, unaccepted result together."""
+    def retain(self, artifacts, *, title, body, scope, repository_evidence=None, experience=None, preference=None, supersedes=None):
+        """Prepare exact sources and one discoverable, unaccepted result together.
+
+        ``experience`` annotates an outcome observed from host events. ``preference``
+        makes the result an unaccepted decision stated by the owner, optionally
+        superseding earlier exact records; acceptance stays a separate owner act.
+        """
         if not isinstance(artifacts, list) or len(artifacts) > 32:
             raise ValueError('retain accepts at most 32 source artifacts')
         if not isinstance(title, str) or not title or not isinstance(body, str) or not body.strip():
@@ -677,9 +754,21 @@ class RealmService:
                         references.append({'id': metadata['id'], 'revision': metadata['revision'],
                                            'digest': 'sha256:' + digest(raw)})
         root = 'records' if 'records' in roots else roots[0]
-        metadata = self._meta('outcome', title, scope, basis=references,
+        for name, value in (('experience', experience), ('preference', preference)):
+            if value is not None and (not isinstance(value, dict) or not isinstance(value.get('schema'), str)
+                                      or len(json.dumps(value, ensure_ascii=False)) > 4000):
+                raise ValueError(name + ' must be a small declared mapping')
+        if supersedes is not None and preference is None:
+            raise ValueError('only an owner preference may supersede through retain')
+        metadata = self._meta('decision' if preference is not None else 'outcome', title, scope, basis=references,
                               retention={'schema': 'ekk.retained-result/0.1',
-                                         'claim_source': 'recorded_assertion'})
+                                         'claim_source': 'owner_statement' if preference is not None else 'recorded_assertion'})
+        if experience is not None: metadata['experience'] = experience
+        if preference is not None: metadata['preference'] = preference
+        if supersedes:
+            if not isinstance(supersedes, list) or len(supersedes) > 8: raise ValueError('bounded exact supersession required')
+            for ref in supersedes: validate_reference(ref, pinned=True)
+            metadata['supersedes'] = supersedes
         if repository_evidence is not None:
             if not isinstance(repository_evidence, dict):
                 raise ValueError('repository evidence must be a recorded declaration')
@@ -802,9 +891,15 @@ class RealmService:
         recreated={key for key in records if key not in old}
         historic_revisions={}
         if recreated:
-            for revision in self.store.history():
-                for key,r in self._load(self.store.snapshot(revision),historical=True)[-1].items():
-                    if key in recreated:historic_revisions[key]=max(historic_revisions.get(key,0),r['metadata']['revision'])
+            versions=self._record_versions() if self.history_index is not None else None
+            if versions is not None and not versions.broken:
+                for key in recreated:
+                    earlier=[row[0] for _,_,row in versions.ranges.get(key,())]
+                    if earlier:historic_revisions[key]=max(earlier)
+            else:
+                for revision in self.store.history():
+                    for key,r in self._load(self.store.snapshot(revision),historical=True)[-1].items():
+                        if key in recreated:historic_revisions[key]=max(historic_revisions.get(key,0),r['metadata']['revision'])
             for key,previous_revision in historic_revisions.items():
                 if records[key]['metadata']['revision']!=previous_revision+1:raise ValueError('recreated ID requires next historical revision')
         for path in changes:
@@ -935,38 +1030,89 @@ class RealmService:
             # Every applicable governing commitment matters to an assessment,
             # including decisions that are optional in ordinary reading context.
             mandatory = sorted(set(mandatory) | governing)
-        tokens = set(re.findall(r'\w+',task.casefold()))
-        source_search_omitted = set()
-        source_scan_limit = CONTEXT_SOURCE_SCAN_BYTES
-        source_scan_bytes = 0
-        def score(k):
-            nonlocal source_scan_bytes
-            r=eligible[k]
-            sections = [r['metadata']['id'], r['metadata']['title'],
-                        *r['metadata'].get('aliases', []), r['body']]
-            for asset in r['metadata'].get('source', {}).get('assets', []):
-                if PurePosixPath(asset['path']).suffix.lower() not in {'.md','.txt','.csv','.tsv','.json','.yaml','.yml','.html','.xml'}:
-                    source_search_omitted.add(asset['path']); continue
-                raw = snapshot['files'][asset['path']]
-                take = min(1048576, source_scan_limit - source_scan_bytes)
-                if len(raw) > take: source_search_omitted.add(asset['path'])
-                if take == 0: continue
-                chunk = raw[:take]
-                source_scan_bytes += len(chunk)
-                try: sections.append(chunk.decode('utf-8'))
-                except UnicodeDecodeError: source_search_omitted.add(asset['path'])
-            return len(tokens & set(re.findall(r'\w+', ' '.join(sections).casefold())))
-        scores = {key: score(key) for key in eligible} if task else {}
-        def relevance(key): return scores.get(key, 0)
-        ranked = sorted((k for k in eligible if k not in mandatory and (k in governing or not task or relevance(k))),key=lambda k:(-relevance(k),k))
+        from . import discovery
+        # Relevance only orders optional reading. Mandatory records were selected
+        # above; other governing records precede all optional reading below.
+        ranker = discovery.RecordRanker(eligible, snapshot['files'], lead_chars=discovery.ENTRY_SOURCE_LEAD_CHARS, query_weight=self.task_terms.weight if self.task_terms is not None else None) if task else None
+        scores = ranker.scores(task) if ranker else {}
+        # Supersession between different current records. A reference pinned to
+        # an earlier version of its target, and a record revising itself, replace nothing.
+        def superseded_target(ref, own):
+            item = {'id': ref} if isinstance(ref, str) else ref
+            target_id = item.get('id', item.get('target'))
+            target = records.get(target_id)
+            if target is None or target_id == own: return None
+            if item.get('digest') and self._hash(item['digest']) != target['digest']: return None
+            if item.get('revision') and item['revision'] != target['metadata']['revision']: return None
+            if item.get('snapshot') and not (item.get('digest') or item.get('revision')) and item['snapshot'] != snapshot['revision']: return None
+            return target_id
+        successors, predecessors, hidden_successor, claimed, claims = {}, {}, set(), {}, {}
+        for key, r in records.items():
+            for ref in self._links(r['metadata'], 'supersedes'):
+                target_id = superseded_target(ref, key)
+                if target_id is None: continue
+                # An unaccepted record cannot replace an accepted one: the link is
+                # only a claim, shown on both rows and never forced into the selection.
+                if target_id in accepted and key not in accepted:
+                    if key in eligible and target_id in eligible:
+                        claimed.setdefault(target_id, set()).add(key); claims.setdefault(key, set()).add(target_id)
+                elif key in eligible:
+                    successors.setdefault(target_id, set()).add(key); predecessors.setdefault(key, set()).add(target_id)
+                else: hidden_successor.add(target_id)
+        def heads(key):
+            # Ends of the chains that replace this record; a fork gives several, a cycle none.
+            found, seen, stack = set(), {key}, sorted(successors.get(key, ()))
+            while stack:
+                current = stack.pop()
+                if current in seen: continue
+                seen.add(current)
+                if successors.get(current): stack.extend(successors[current])
+                else: found.add(current)
+            return sorted(found)
+        def archive(key):
+            m = records[key]['metadata']
+            return isinstance(m.get('migration'), dict) or m.get('adoption') == 'not_adopted'
+        # A record sharing only a minor word with the task is not a candidate:
+        # keep scores within a fixed fraction of the best match.
+        # The floor and the candidates use the plain score, before any prior.
+        floor = discovery.ENTRY_RELATIVE_SCORE_FLOOR * max(scores.values()) if scores else 0
+        def passes(key): return bool(scores.get(key)) and scores[key] >= floor
+        # Current first: a replaced candidate gives its place and its score to the
+        # heads of its chain. A governing record is never substituted; its heads
+        # are selected with it.
+        base = dict(scores); matched = set()
+        for key in eligible:
+            if key in mandatory or not (key in governing or not task or passes(key)): continue
+            chain = [] if key in governing else heads(key)
+            if not chain: matched.add(key)
+            for head in chain:
+                if head in mandatory: continue
+                matched.add(head); base[head] = max(base.get(head, 0), scores.get(key, 0))
+        # Priors weigh the plain score; neither is a tier. An owner's stated
+        # preference counts for more, imported and not-adopted history for less.
+        def prior(key):
+            m = records[key]['metadata']; preference = m.get('preference')
+            return (discovery.RecordRanker.PREFERENCE_BOOST if isinstance(preference, dict) and preference.get('stated_by') == 'owner' else 1.0) * (discovery.ARCHIVE_PRIOR if archive(key) else 1.0)
+        def relevance(key): return base.get(key, 0) * prior(key)
+        # Equal relevance (always so without a task): current material before archive, then by id.
+        def order(key): return (-relevance(key), archive(key), key)
+        ranked = sorted(matched, key=order)
+        # Plain lexical order, for comparison with the entry order: no priors, no successor substitution.
+        plain_order = [{'id': k, 'title': eligible[k]['metadata']['title'], 'kind': 'preference' if isinstance(eligible[k]['metadata'].get('preference'), dict) else eligible[k]['metadata']['kind'],
+                        'revision': eligible[k]['metadata']['revision'], 'digest': 'sha256:' + eligible[k]['digest']}
+                       for k in sorted((k for k in eligible if k not in mandatory and passes(k)), key=lambda k: (-scores[k], k))[:8]]
         if action_requirements:
             ranked = []
         selected={}; unknowns=list(declaration_unknowns); used=0; blocked=False; omitted=[]
         reading_unknowns = set()
-        def closure(key, bundle, override=None, candidates=None, historical_focus=False):
+        def grounds(m):
+            # Optional reading names what it replaces by reference; the replaced body is not bundled.
+            return self._refs({**m, 'supersedes': [], 'relations': [x for x in m.get('relations', []) if x['rel'] != 'supersedes']})
+        def closure(key, bundle, override=None, candidates=None, historical_focus=False, optional=False, trail=None):
             candidates = records if candidates is None else candidates
             r=override or candidates[key]
             marker=key if key in records and r['digest']==records[key]['digest'] else key+'@'+r['digest']
+            if trail is not None: trail.add(marker)
             if marker in bundle or marker in selected: return
             if not (set(r['metadata']['scope']) & set(scopes)) or not readable(r):
                 unknowns.append('required dependency outside requested or authorized projection')
@@ -977,7 +1123,7 @@ class RealmService:
             historic = r.get('snapshot_revision')
             if historic and candidates and historic != next(iter(candidates.values())).get('snapshot_revision'):
                 candidates = self._load(self.store.snapshot(historic), historical=True)[-1]
-            for ref in self._refs(r['metadata']):
+            for ref in (grounds(r['metadata']) if optional else self._refs(r['metadata'])):
                 if historical_focus and (not isinstance(ref, dict) or not any(ref.get(field) for field in ('revision','digest','snapshot'))):
                     reading_unknowns.add('selected historical material has an unpinned dependency; its version at initial publication is not identified')
                 dependency=self._reference(ref,candidates)
@@ -986,7 +1132,7 @@ class RealmService:
                     unknowns.append('required dependency outside requested or authorized projection')
                     continue
                 # Pinned historical bytes, never silently substitute the latest body.
-                closure(depkey,bundle,dependency,candidates,historical_focus)
+                closure(depkey,bundle,dependency,candidates,historical_focus,optional,trail)
         required={}
         for key in mandatory: closure(key,required)
         for ref in forced:
@@ -1003,17 +1149,45 @@ class RealmService:
             related = related_candidates(list(required.values()) + [eligible[key] for key in ranked],
                 eligible, realm_id=realm['id'], resolve_reference=authorized_exact)
             ranked = sorted(set(ranked) | (set(related['ids']) - set(mandatory)),
-                            key=lambda key: (key not in related['ids'], -relevance(key), key))
-        cost=lambda bundle:sum(len(self.codec.encode(r['metadata'],r['body'])) for r in bundle.values())
+                            key=lambda key: (key not in related['ids'], *order(key)))
+            # Replaced required reading brings the heads of its chain, ahead of other optional reading.
+            owed = list(dict.fromkeys(head for marker in required if marker in records for head in heads(marker) if head not in required))
+            ranked = owed + [key for key in ranked if key not in owed]
+            # Governing records are never crowded out by optional reading.
+            ranked = [key for key in ranked if key in governing] + [key for key in ranked if key not in governing]
+        related_ids = set() if action_requirements else set(related['ids'])
+        companions = set() if action_requirements else set(owed)
+        def with_heads(bundle):
+            # A replaced record is never selected without the heads of its chain.
+            pending = True
+            while pending:
+                pending = False
+                for marker in list(bundle):
+                    for head in (heads(marker) if marker in records else ()):
+                        companions.add(head)
+                        if head not in bundle and head not in selected:
+                            closure(head, bundle, optional=True); pending = True
+        files=snapshot['files']
+        def stored_size(r):
+            # Current records are their stored canonical bytes; only a pinned
+            # historical version needs re-encoding to be measured.
+            if r.get('snapshot_revision')==snapshot['revision'] and r.get('path') in files:return len(files[r['path']])
+            return len(self.codec.encode(r['metadata'],r['body']))
+        cost=lambda bundle:sum(stored_size(r) for r in bundle.values())
+        primary=set(); ground_trail={}
         if cost(required)>budget:
             blocked=True; unknowns.append(('required rules or selected material' if forced else 'mandatory constraints')+' exceed byte budget; narrow scope or increase budget')
         else:
             selected.update(required);used=cost(required)
             for key in ranked:
-                bundle={};closure(key,bundle)
+                # One appearance: a record already selected as a ground of an
+                # earlier item is not listed again in its own right.
+                if key in selected and key not in related_ids: continue
+                bundle={};trail=set();closure(key,bundle,optional=True,trail=trail)
+                with_heads(bundle)
                 size=cost(bundle)
                 if used+size>budget: omitted.append(key);continue
-                selected.update(bundle);used+=size
+                selected.update(bundle);used+=size;primary.add(key);ground_trail[key]=trail-{key}
         conflicts=[]
         for key in sorted(governing):
             for ref in self._links(records[key]['metadata'],'conflicts'):
@@ -1022,9 +1196,28 @@ class RealmService:
         if conflicts: blocked=True
         if unknowns: blocked=True
         result=[]
+        def exact(k): return {'id':k,'title':records[k]['metadata']['title'],'revision':records[k]['metadata']['revision'],'digest':'sha256:'+records[k]['digest']}
         for key,r in selected.items():
             m=r['metadata'];known=m['kind'] in KINDS
-            result.append({'id':m['id'],'metadata':m,'body':r['body'],'digest':r['digest'],'governs':key in governing and known,'mandatory':key in mandatory,'source_content':m['kind']=='source','inert':not known,'serialization_warnings':r.get('serialization_warnings',[])})
+            row={'id':m['id'],'metadata':m,'body':r['body'],'digest':r['digest'],'governs':key in governing and known,'mandatory':key in mandatory,'source_content':m['kind']=='source','inert':not known,'serialization_warnings':r.get('serialization_warnings',[])}
+            # Why the record is here: display advice only, never authority.
+            row['selection']='required' if key in required else 'related' if key in primary and key in related_ids else 'ranked' if key in primary and key in matched else 'successor' if key in companions else 'ranked' if key in primary else 'dependency'
+            if ranker and row['selection']=='ranked':
+                row['discovery']={'score':round(relevance(key),3),**({'plain_score':round(scores.get(key,0),3)} if round(scores.get(key,0),3)!=round(relevance(key),3) else {}),**ranker.explain(key,task)}
+            if ground_trail.get(key):
+                # The count, and up to three exact references so a ground can be fetched.
+                row['grounds']=len(ground_trail[key]);row['ground_refs']=[exact(k) for k in sorted(ground_trail[key]) if k in records][:3]
+            if key in records:
+                # Current-first annotations: additive display fields, never authority.
+                if archive(key): row['tier']='archive'
+                if predecessors.get(key): row['replaces']=[exact(k) for k in sorted(predecessors[key])]
+                if successors.get(key): row['superseded_by']=[exact(k) for k in sorted(successors[key])]
+                if claims.get(key): row['claims_to_replace']=[exact(k) for k in sorted(claims[key])]
+                if claimed.get(key): row['replacement_claimed_by']=[exact(k) for k in sorted(claimed[key])]
+                if not action_requirements:
+                    if any(head not in selected for head in heads(key)): reading_unknowns.add('selected material is superseded; its successor did not fit the byte budget')
+                    if key in hidden_successor: reading_unknowns.add('selected material has a successor outside the requested or authorized projection')
+            result.append(row)
         if action_requirements:
             incomplete = bool(blocked or unknowns or reading_unknowns)
             projection = {'schema': 'ekk.context-projection/0.1', 'kind': selection,
@@ -1046,7 +1239,7 @@ class RealmService:
         insights = context_insights(result, eligible, realm_id=realm['id'],
             resolve_reference=authorized_exact,
             incomplete=related['incomplete'] or bool(set(related['ids']) & set(omitted)))
-        return {'schema':'ekk.context/0.1','blocked':blocked,'scopes':sorted(scopes),'task':task,'records':result,'insights':insights,'conflicts':conflicts,'unknowns':sorted(set(unknowns)),'warnings':sorted(reading_unknowns), 'manifest':{'realm_id':realm['id'],'snapshots':[{'realm_id':realm['id'],'revision':snapshot['revision']}],'principal':self.principal,'policy_digest':digest(snapshot['files'][CONTROL[1]]),'packs_digest':digest(snapshot['files'][CONTROL[2]]),'packs':packs.get('packages',[]),**({'forced_refs':forced} if forced else {}),'used_refs':[{'id':r['id'],'revision':r['metadata']['revision'],'digest':r['digest']} for r in result],'freshness':{'snapshot':snapshot['revision'],'assembled_at':now,'external_sources':'unknown'},'source_search':{'encoding':'UTF-8','max_bytes_per_asset':1048576,'scan_budget_bytes':source_scan_limit,'scanned_bytes':source_scan_bytes,'omitted_or_partial_assets':len(source_search_omitted)},'incomplete':bool(omitted or unknowns or reading_unknowns or blocked or insights['incomplete'] or source_search_omitted),'omitted':omitted,'budget_scope':'canonical_record_bytes','budget_bytes':budget,'used_bytes':used,'insights_budget_bytes':insights['byte_budget']},'authority_note':'All statements are fallible recorded content. Acceptance is local authority, not truth or execution permission. Scopes filter output, not filesystem access.'}
+        return {'schema':'ekk.context/0.1','blocked':blocked,'scopes':sorted(scopes),'task':task,'records':result,'insights':insights,'conflicts':conflicts,'unknowns':sorted(set(unknowns)),'warnings':sorted(reading_unknowns), 'manifest':{'realm_id':realm['id'],'snapshots':[{'realm_id':realm['id'],'revision':snapshot['revision']}],'principal':self.principal,'policy_digest':digest(snapshot['files'][CONTROL[1]]),'packs_digest':digest(snapshot['files'][CONTROL[2]]),'packs':packs.get('packages',[]),**({'forced_refs':forced} if forced else {}),'used_refs':[{'id':r['id'],'revision':r['metadata']['revision'],'digest':r['digest']} for r in result],'freshness':{'snapshot':snapshot['revision'],'assembled_at':now,'external_sources':'unknown'},'source_search':ranker.coverage if ranker else {'method':'none','reason':'no task text'},'ranking':{'order':'governing records, then challenges of selected material and owed successors, then optional reading by descending relevance; equal relevance: current before archive, then by id','relevance':'best plain score of the record and of the matched records whose chain it heads, multiplied by the priors that apply','archive':'records with a migration mapping or adoption not_adopted','relative_score_floor':discovery.ENTRY_RELATIVE_SCORE_FLOOR,'floor_basis':'best plain score','current_first':'a superseded record gives its place and best score to the heads of its chain','priors':{'owner_preference':discovery.RecordRanker.PREFERENCE_BOOST,'archive':discovery.ARCHIVE_PRIOR},'plain_order':plain_order,'effect':'orders optional reading only'},'incomplete':bool(omitted or unknowns or reading_unknowns or blocked or insights['incomplete']),'omitted':omitted,'omitted_governing':[{'id':k,'title':records[k]['metadata']['title']} for k in omitted if k in governing],'budget_scope':'canonical_record_bytes','budget_bytes':budget,'used_bytes':used,'insights_budget_bytes':insights['byte_budget']},'authority_note':'All statements are fallible recorded content. Acceptance is local authority, not truth or execution permission. Scopes filter output, not filesystem access.'}
 
     def review(self, scopes):
         snapshot=self.store.snapshot();_,policy,_,records=self._validate(snapshot)

@@ -1,13 +1,23 @@
 # Roadmap
 
-**Next: make the daily workflow reproducible, establish trustworthy measurement,
-then test whether conditional method reuse earns its cost.**
+**Next product release: 0.9 — acquire useful observations during work and recall
+them when a later decision makes them relevant.**
 
-This is a proposed sequence updated **2026-09-09**, with completion criteria rather
-than promised dates. It connects the [open research agenda](research/agenda.md)
-to product and contributor work. Research questions remain open even when an
-engineering task is complete. Task IDs can be used in issues and pull requests;
-this file does not imply those issues, assignments or funded runs already exist.
+Product planning updated **2026-09-21**. The [0.9 specification](docs/releases/0.9/spec.md),
+[design](docs/releases/0.9/design.md), [tasks](docs/releases/0.9/tasks.md) and
+[current status](docs/releases/0.9/status.md) form one working release package.
+Implementation and delivery state live there. The first slice establishes actual
+host event and recall-delivery capabilities; a post-task log reader alone does not fulfill the
+connected outcome. [Release organization](docs/releases/README.md) defines the
+shared format and separates implementation, local delivery, publication and benefit.
+
+The research sequence below retains its **2026-09-09** framing unless a section
+states a later change. It connects the [open research agenda](research/agenda.md)
+to contributor work and remains independent of the 0.9 product release gate.
+Ordinary use and selected real episodes guide product improvement; no artificial
+agent competition or scientific win is required for local delivery. Research
+questions remain open even when an engineering task is complete. Task IDs do not
+imply that external issues, assignments or funded runs already exist.
 
 ## Starting point
 
@@ -15,6 +25,7 @@ this file does not imply those issues, assignments or funded runs already exist.
 | --- | --- | --- |
 | Public runtime | [0.7.0 English research prerelease](https://github.com/kizz-tech/evolutionary-knowledge-kernel/releases/tag/v0.7.0), released 2026-09-09 | Public publication and the owner's installed version are separate facts |
 | Continuous work | [0.8 approved specification](docs/plans/v0.8/spec.md), [implementation state](docs/plans/v0.8/implementation.md) | Connected workflow and local installation are checked separately from benefit in ordinary use |
+| Observations and contextual recall | [0.9 specification](docs/releases/0.9/spec.md), [working status](docs/releases/0.9/status.md) | Live capture/delivery, implementation, model evaluation and benefit have separate evidence states in the release package |
 | Daily reliability increment | 0.6 implemented and included in 0.7 | Exact retention, diagnostics and isolated recovery remain the foundation of the 0.8 outbox |
 | Method lifecycle | Deterministic evaluation, local admission, transfer, quarantine and retirement demonstration | No empirical productivity or general transfer result |
 | Human/shared/method-transfer study | Existing protocol and contract validator; `designed_not_run`, freeze unset | Actual study design choices, execution and independent analysis are still required |
@@ -147,10 +158,12 @@ need and access model are established.
 
 ## Updating progress and contributing
 
-Keep status and dependencies here; keep exact protocols and observed results with
-their study. When a result arrives, link its artifacts, summarize what changed in
-the decision, and preserve the earlier interpretation in version history. No
-results currently exist for the applicability comparison.
+Keep product-release status and dependencies in the linked release package;
+keep research sequencing here and exact protocols/results with their study. Do
+not maintain duplicate task states in the roadmap. When a result arrives, link
+its artifacts, summarize what changed in the decision, and preserve the earlier
+interpretation in version history. No results currently exist for the
+applicability comparison.
 
 Useful first contributions are a CASE fixture, a BASE reproduction inventory, a
 stronger comparison proposal or a counterexample tied to an EKK-Q ID. See

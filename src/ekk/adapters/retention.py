@@ -174,7 +174,8 @@ def capture_once(app, data, *, title, scopes, filename, key, expected_snapshot=N
                  scopes=scopes, key=key, expected_snapshot=expected_snapshot)
 
 
-def retain_once(app, artifacts, *, title, body, scopes, key, expected_snapshot=None, repository_evidence=None):
+def retain_once(app, artifacts, *, title, body, scopes, key, expected_snapshot=None, repository_evidence=None,
+                experience=None, preference=None, supersedes=None):
     if not isinstance(artifacts, list) or len(artifacts) > 32:
         raise ValueError('retain accepts at most 32 source artifacts')
     for artifact in artifacts:
@@ -184,11 +185,15 @@ def retain_once(app, artifacts, *, title, body, scopes, key, expected_snapshot=N
         sources = [{**{k: v for k, v in item.items() if k != 'data'}, 'sha256': _hash(item['data'])}
                    for item in artifacts]
         value = [identity, 'retain', title, body, scopes, sources, expected_snapshot]
-        return value if repository_evidence is None else [*value, repository_evidence]
+        if repository_evidence is not None: value = [*value, repository_evidence]
+        # Appended only when present, so earlier request journals keep their digests.
+        extras = {name: item for name, item in (('experience', experience), ('preference', preference), ('supersedes', supersedes)) if item is not None}
+        return [*value, extras] if extras else value
     from .operation_diagnostics import observed_call
     realm = app.codec.load_yaml(app.store.snapshot()['files']['.ekk/realm.yaml'])['id']
     return observed_call('retain', lambda: _once(app, operation='retain', fingerprint=fingerprint,
                  build=lambda: app.retain(artifacts, title=title, body=body, scope=scopes,
-                                         repository_evidence=repository_evidence),
+                                         repository_evidence=repository_evidence, experience=experience,
+                                         preference=preference, supersedes=supersedes),
                  scopes=scopes, key=key, expected_snapshot=expected_snapshot),
                  realm_id=realm, principal=app.principal, key=key)

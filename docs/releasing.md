@@ -1,5 +1,11 @@
 # Preparing an English release
 
+Product scope, tasks, decisions and delivery state live in a
+[working release package](releases/README.md). This page owns artifact preparation
+and its existing JSON contract; creating a release spec does not build, install
+or publish a package. New package documents enter an export only after explicit
+inventory review.
+
 Prepare from the development checkout's explicit `ekk.reference_export.FILES`
 allowlist into a new, separate output directory. Never push development history
 or include active knowledge, profiles, local reports or runtime state. Preparation

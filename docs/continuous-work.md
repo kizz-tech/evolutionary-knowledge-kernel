@@ -8,11 +8,19 @@ Look up only the rationale or convention that is missing.
 ## Find and continue
 
 `ekk enter --cwd PROJECT --task 'outcome' --brief` preserves complete selected
-restrictions and provides short optional excerpts with exact references. A blocked
-projection stays blocked. Full governing metadata is retained, so a large set of
-restrictions can exceed the optional 8 kB display target. `--compact` keeps its
-older, lossless display contract. Use `fetch` for exact records and `read-source`
-for original assets. An excerpt is not the complete evidence.
+restrictions and lists other selected records briefly: title, date, the passage
+where the task's words concentrate, why the record was selected, and an exact
+reference. Pinned records and grounds appear as title and ID; grounds of other
+items are counted and named by reference. A blocked projection
+stays blocked. Required reading is always complete; the 4 kB display target bounds
+only the other items. `--compact` prints the same view. Use `fetch --id ID` for an
+exact record and `read-source --id ID` for its original asset. A passage is not the
+complete evidence.
+
+Entry orders optional reading by BM25 relevance over titles, aliases, bodies and
+the readable opening of each text source, ignoring common words. It is lexical: it
+does not understand paraphrase or translate between languages. Use `search` for
+deep full-text matching across whole sources.
 
 `ekk work find --cwd PROJECT --query 'words I remember'` searches intentions,
 titles, aliases and continuation text with partial lexical matching. General
@@ -45,7 +53,8 @@ and `locator`; the external tracker remains authoritative for its own state.
 
 ## Durable publication
 
-For substantial results, `queue submit` freezes an exact request locally before
+`retain` and `capture` already queue their request and return at once. For other
+durable writes, `queue submit` freezes an exact request locally before
 starting a short-lived publisher. No long-running daemon is installed:
 
 ```json
@@ -95,11 +104,13 @@ takes `id`, current `revision`, `key`, and `title` or `status`. Local status is
 
 `task wait` takes `id`, `revision`, `key` and `until` with timezone or `condition`.
 Its registration starts as `not_registered`. When the user requests a reminder or
-later continuation, the agent uses the existing Codex automation tool in the same
-task, then records the actual returned receipt through `task register-wait` with
-`host_receipt: {host: "codex", automation_id, receipt}`. This is a recorded host
-receipt, not an independent verification that the schedule remains active. Update
-or cancel the automation through its host. A written date never creates one.
+later continuation, the agent uses its host's existing automation tool in the same
+task (a Codex automation or a Claude Code scheduled task), then records the actual
+returned receipt through `task register-wait` with `host_receipt: {host,
+automation_id, receipt}`, where `host` is `codex` or `claude-code`. This is a
+recorded host receipt, not an independent verification that the schedule remains
+active. Update or cancel the automation through its host. A written date never
+creates one.
 
 Before an authorized external action with uncertain delivery, `external-attempt`
 records `operation_key` and starts as `unknown`. `external-outcome` requires that

@@ -24,32 +24,83 @@ class CurrentCliTests(unittest.TestCase):
             code=main(args+(['--stdin'] if body is not None else []))
         return code,json.loads(output.getvalue() or error.getvalue())
     def test_capture_retry_and_changed_request(self):
-        args=['capture','--root',str(self.realm),'--scope',self.scope,'--idempotency-key','same']
+        args=['capture','--root',str(self.realm),'--scope',self.scope,'--idempotency-key','same','--wait']
         a=self.call(args,{'body':'first','title':'One'});self.assertEqual(a[0],0,a)
         b=self.call(args,{'body':'first','title':'One'});self.assertEqual(b,a)
         c=self.call(args,{'body':'different','title':'One'});self.assertEqual(c[0],2,c)
         self.assertEqual(self.app.doctor()['records'],2)
-    def test_compact_is_explicit_display_only(self):
+    def test_compact_and_brief_are_one_display_only_agent_view(self):
         args=['context','--root',str(self.realm),'--scope',self.scope]
         code,full=self.call(args)
         self.assertEqual(code,0,full)
+        self.assertEqual(full['schema'],'ekk.context/0.1')
         code,compact=self.call(args+['--compact'])
         self.assertEqual(code,0,compact)
-        self.assertEqual(full['schema'],'ekk.context/0.1')
-        self.assertEqual(compact['schema'],'ekk.context-display/0.1')
-        self.assertEqual(full['records'],compact['records'])
-        self.assertEqual(full['manifest']['used_refs'],compact['manifest']['used_refs'])
+        self.assertEqual(compact,self.call(args+['--brief'])[1])
+        self.assertEqual(compact['schema'],'ekk.context-brief/0.3')
+        self.assertEqual(compact['snapshot'],full['manifest']['snapshots'])
         code,entered=self.call(['enter','--root',str(self.realm),'--scope',self.scope,'--compact'])
         self.assertEqual(code,0,entered)
-        self.assertEqual(entered['schema'],'ekk.context-display/0.1')
-        for body in ({}, {'request_id':'one','operation':'context'}):
-            code,error=self.call(args+['--compact'],body)
-            self.assertEqual(code,2,error)
-        code,error=self.call(['capture','--root',str(self.realm),'--compact'])
+        self.assertEqual(entered['schema'],'ekk.context-brief/0.3')
+        code,wrapped=self.call(args+['--compact'],{'request_id':'one','operation':'context'})
+        self.assertEqual(code,0,wrapped)
+        self.assertEqual(wrapped['data']['schema'],'ekk.context-brief/0.3')
+        # Display flags elsewhere are accepted and change nothing.
+        code,listed=self.call(['contexts','--root',str(self.realm),'--scope',self.scope,'--compact'])
+        self.assertEqual(code,0,listed)
+        self.assertEqual(listed,self.call(['contexts','--root',str(self.realm),'--scope',self.scope])[1])
+    def test_retain_is_queued_by_default_and_published_with_wait(self):
+        args=['retain','--root',str(self.realm),'--scope',self.scope,'--title','Result']
+        before=self.app.doctor()['records']
+        with patch('ekk.adapters.activity_cli.start_worker',return_value={'started':False,'test':True}) as worker:
+            code,queued=self.call(args,{'body':'Local result.'})
+            self.assertEqual(code,0,queued)
+            self.assertEqual((queued['schema'],queued['state']),('ekk.retention-queued/0.1','local_pending'))
+            self.assertNotIn('retention',queued)
+            self.assertIn('not confirmed',queued['meaning'])
+            self.assertEqual(self.call(args,{'body':'Local result.'})[1]['key'],queued['key'])
+            self.assertNotEqual(self.call(args,{'body':'Other result.'})[1]['key'],queued['key'])
+            self.assertEqual(worker.call_count,3)
+        self.assertEqual(self.app.doctor()['records'],before)
+        code,error=self.call(args,{'body':' '})
         self.assertEqual(code,2,error)
-    def test_no_capture_key_no_mutation(self):
-        code,_=self.call(['capture','--root',str(self.realm),'--scope',self.scope],{'body':'first'})
-        self.assertEqual(code,2);self.assertEqual(self.app.doctor()['records'],1)
+        code,published=self.call(args+['--wait','--idempotency-key','sync'],{'body':'Local result.'})
+        self.assertEqual(code,0,published)
+        self.assertIn(published['retention']['state'],{'read_back','read_back_and_discoverable'})
+        reference=published['result_reference']
+        code,read=self.call(['fetch','--root',str(self.realm),'--scope',self.scope,'--id',reference['id']])
+        self.assertEqual(code,0,read)
+        self.assertEqual(read['reference']['digest'],reference['digest'])
+        code,error=self.call(['fetch','--root',str(self.realm),'--scope',self.scope])
+        self.assertEqual(code,2,error)
+    def test_capture_without_key_derives_the_content_key(self):
+        # The same bytes name the same key, so a retry publishes nothing new.
+        code,first=self.call(['capture','--root',str(self.realm),'--scope',self.scope,'--wait'],{'body':'first'})
+        self.assertEqual(code,0,first);self.assertEqual(self.app.doctor()['records'],2)
+        code,again=self.call(['capture','--root',str(self.realm),'--scope',self.scope,'--wait'],{'body':'first'})
+        self.assertEqual(code,0,again);self.assertEqual(self.app.doctor()['records'],2)
+        self.assertEqual(first['reference']['id'] if 'reference' in first else first.get('result_reference'),
+                         again['reference']['id'] if 'reference' in again else again.get('result_reference'))
+    def test_capture_is_queued_by_default_and_published_by_the_worker(self):
+        from ekk.adapters import activity_cli
+        args=['capture','--root',str(self.realm),'--scope',self.scope,'--title','Page']
+        with patch('ekk.adapters.activity_cli.start_worker',return_value={'started':False,'test':True}):
+            code,queued=self.call(args,{'body':'exact source bytes','filename':'page.html'})
+            self.assertEqual(code,0,queued)
+            self.assertEqual((queued['schema'],queued['state']),('ekk.retention-queued/0.1','local_pending'))
+            self.assertTrue(queued['key'].startswith('capture-'))
+            self.assertEqual(self.call(args,{'body':'exact source bytes','filename':'page.html'})[1]['key'],queued['key'])
+        self.assertEqual(self.app.doctor()['records'],1)
+        store=activity_cli.local_store(self.app,self.app.initial_realm_id)
+        try:
+            result=store.drain([self.scope],activity_cli.publish)
+            row=store.status([self.scope],key=queued['key'])['operations'][0]
+        finally:store.close()
+        self.assertEqual(row['state'],'read_back_and_discoverable',result)
+        records=self.app._load(self.app.store.snapshot())[-1]
+        source=next(r for r in records.values() if r['metadata']['kind']=='source')
+        asset=source['metadata']['source']['assets'][0]
+        self.assertEqual(self.app.store.snapshot()['files'][asset['path']],b'exact source bytes')
     def test_malformed_json_shapes_return_json_errors(self):
         for op,body in [('propose',{'changes':[]}),('capture',{'body':{}}),('context',{'scopes':None})]:
             code,data=self.call([op,'--root',str(self.realm),'--scope',self.scope],body)
@@ -101,7 +152,7 @@ class CurrentCliTests(unittest.TestCase):
 
     def test_common_capture_retry_retains_operation_result(self):
         request={'request_id':'capture-envelope','operation':'capture','payload':{'body':'same source','title':'Common source'}}
-        args=['capture','--root',str(self.realm),'--scope',self.scope]
+        args=['capture','--root',str(self.realm),'--scope',self.scope,'--wait']
         first=self.call(args,request);second=self.call(args,request)
         self.assertEqual(first[0],0,first);self.assertEqual(first,second)
         self.assertEqual(first[1]['operation'],'capture');self.assertEqual(first[1]['data']['state'],'published')
@@ -137,7 +188,7 @@ class CurrentCliTests(unittest.TestCase):
         self.assertFalse((self.root/'conflict-init').exists())
 
     def test_capture_returns_exact_source_reference(self):
-        args=['capture','--root',str(self.realm),'--scope',self.scope,'--idempotency-key','refs']
+        args=['capture','--root',str(self.realm),'--scope',self.scope,'--idempotency-key','refs','--wait']
         code,data=self.call(args,{'request_id':'source-ref','operation':'capture','payload':{'body':'source bytes','title':'Addressable'}})
         self.assertEqual(code,0,data)
         reference=data['source_references'][0]

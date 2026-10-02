@@ -1,3 +1,39 @@
+# EKK 0.9.0 release validation
+
+The 0.9.0 public export (363 reviewed files) was prepared from the development
+source with `tools/prepare_release.py` against the hash-pinned 0.7.0 snapshots;
+every Python file is byte-identical to the development source except for
+Cyrillic string literals written as `\u` escapes with an identical AST and the
+English edition files reused from 0.7.0 with their recorded provenance.
+
+Validation on Python 3.13.5:
+
+- The development source of the same bytes passed the complete suite through
+  `tools/run_tests.py`: **587 tests OK**, no known failures, before the export was
+  prepared.
+- The frozen export ran the same suite from its own tree (`tools/run_tests.py`
+  from the export root): 585 tests passed on the first run; the two
+  timing-sensitive modules, `test_lock_contention` and `test_operation_journal`,
+  failed while the machine carried an unrelated load average above 130.
+  `test_lock_contention` passed when rerun alone. One test of
+  `test_operation_journal` (four processes contending for the journal lock with
+  a bounded wait) kept failing under that load and is recorded as not reproduced
+  in the export environment; it passes in the development run above on identical
+  bytes.
+- Exporter and preparation checks: `test_reference_export` and
+  `test_prepare_release` pass; `tests/test_public_english.py` in the export finds
+  no Cyrillic and verifies the translation provenance.
+- The wheel built from the export (`pip wheel --no-deps`) was installed into a
+  copy of the active release environment and initialized and audited a temporary
+  realm (`init`, `doctor`); its Python modules, packs and schemas are byte-identical
+  to the export (`finalize_artifacts.py`).
+- No tests were skipped. The empirical study remains not run; no model or human
+  benefit is claimed.
+
+The runtime of the same bytes is installed locally; its field measurements are in
+[releases/1.0/status.md](releases/1.0/status.md) and the
+[0.9.0 release notes](release-notes-0.9.0.md).
+
 # EKK 0.8 release validation
 
 The final frozen English edition passed **448 kernel tests**, each
@@ -40,9 +76,9 @@ different operation/load condition and is reported separately.
 Technical checks establish integrity and integration, not better agent judgment,
 productivity or human benefit. Those remain subject to ordinary use and feedback.
 No artificial model trial was run. The authored-source adapter awaits the owner's
-folder choice. An actual Codex schedule receipt was recorded for release waiting;
-a deferred wake while this turn stayed active was not observed. Local transport
-health does not establish that an existing ChatGPT conversation refreshed its
+folder choice. A scheduled-automation receipt was recorded for release waiting; a
+deferred wake inside the same active turn was not observed. Local transport
+health does not establish that an existing client conversation refreshed its
 cached tool catalog.
 
 ## Exact release inputs

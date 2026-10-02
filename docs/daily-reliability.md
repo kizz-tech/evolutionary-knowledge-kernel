@@ -30,6 +30,15 @@ ekk retain --cwd /path/to/project --title 'Integration result' \
   --file evidence.txt --result-file result.md --idempotency-key integration-2026-09-08
 ```
 
+By default `retain` freezes the request in the durable local queue, starts the
+background publisher and returns at once with `ekk.retention-queued/0.1`, its
+logical `key` and `state: local_pending`. That result confirms durability on this
+host only. Report the result as pending until `ekk queue status --cwd PROJECT --key
+KEY` shows `read_back_and_discoverable`. Without a supplied key, identical content
+yields the same key, so a retry cannot create a second result. Add `--wait` to
+publish and verify before returning; the receipt described below is then returned
+directly.
+
 For several artifacts, use a JSON request with `title`, `body`,
 `idempotency_key`, and `artifacts`. Each artifact has a basename `filename`,
 optional `title`, and exactly one UTF-8 `body` or `base64`. The private MCP adapter
@@ -46,7 +55,8 @@ exposes the same operation as `ekk_retain` within its configured space and scope
 }
 ```
 
-`capture` retains one source. Both operations return the original publication
+`capture` retains one source. Both operations queue by default; with `--wait`, or
+through `queue status` once published, they return the original publication
 receipt and exact `source_references`; `retain` also returns `result_reference`.
 They read published record and asset bytes back under current access, compare them
 with the exact request, and check discovery through the ordinary scoped search.
@@ -91,11 +101,74 @@ avoids a duplex pipe stall observed when large snapshot batches sent many object
 IDs while Git returned large binary blobs. Exact framing and bytes are preserved;
 there is no fallback writer or automatic retry of an uncertain mutation.
 
-Recovery validates every recorded operation and reads each unique historical
-blob once per recovery call, comparing tree identities and request SHA-256
-digests. Deleted baseline blobs remain checked. The digest memo is discarded
-after the call; current file projection and pending-operation checks still run.
-This avoids rereading unchanged source bytes in every historical snapshot.
+Explicit recovery (`ekk recover`), restore activation and a store without a
+verification checkpoint validate every recorded operation and read each unique
+historical blob once, comparing tree identities and request SHA-256 digests.
+Deleted baseline blobs remain checked. The digest memo is discarded after the
+call; current file projection and pending-operation checks still run.
+
+A write audits only what was not audited before. A private checkpoint in the
+runtime directory lists the operations a previous pass audited, with their
+evidence commit and completed journal digest, and the time of the last successful
+full audit. The checkpoint lets a write skip one thing: reading the trees and
+blobs of those operations again. On every write each runtime journal is still
+compared with its operation evidence in Git, read in one batch, and each
+operation must still be in published history, so no file in the runtime directory
+can vouch for another. Any operation that is new, pending or changed is verified
+in full. The checkpoint is ignored when the verifying code changes. The number of
+Git processes a write starts does not grow with the number of earlier operations.
+
+Corruption of an old object is therefore found by the full audit, not by the
+next write. The full audit has three owners:
+
+- the background publisher (`ekk queue drain --background`, started by every
+  queued `retain`, `capture` and work operation) runs it before publishing when
+  the store has no checkpoint or the last full audit is older than seven days;
+- `ekk recover`, which you should also run after a crash, a restore or a
+  suspected disk problem;
+- restore activation, and `tools/local_install.py warm` after a new release is
+  activated.
+
+When a full audit refuses operation evidence, the checkpoint is removed. Every
+write then audits everything and refuses, as before the checkpoint existed, until
+the cause is resolved and `ekk recover` passes. A background publisher runs the
+due audit under the queue's worker lock, so a second worker started meanwhile
+leaves quietly. When the audit fails the publisher publishes nothing, marks every
+waiting request `needs_attention` with the audit error (so `ekk queue status
+--key KEY`, the check an agent is given, shows it), and writes one JSON line with
+`"store_audit": "failed"` to the queue's `worker.log`; after `ekk recover` passes,
+`ekk queue retry --key KEY` republishes. The audit records itself as soon as the
+operation evidence passed: an external working-tree edit or a projection it
+blocks is not an evidence failure, is reported per request as before, and leaves
+the checkpoint in place.
+
+A replay reports the recorded publication. `lookup`, and `apply` or a retried
+`retain`/`capture` with a key that is already published, return the original
+receipt after checking the operation evidence and its presence in published
+history. They do not read the working tree. The working-tree projection is
+checked by every new write, against its base, and by explicit recovery, which
+refuses an external edit.
+
+After activating a release, `tools/local_install.py warm` runs the full audit and
+builds the record version index for every store named in the owner's profiles,
+with the active release, and prints one line per store with both durations. A
+release that changes the store adapters makes every checkpoint foreign, and one
+that changes the historical loader makes the version index cold; without the
+warm-up the first write and the first historical reference pay for that. The
+index depends only on the loader itself, the envelope and method rules, the
+codec, the schemas and the YAML and JSON Schema libraries, so other changes to
+the application keep it warm.
+
+Known limitation of contained realms. A contained realm shares the history of
+its outer repository, and the check that a new record ID was never used before
+loads every outer commit as a realm. If any outer commit does not hold a loadable
+realm under the prefix, for example because the realm was added to an existing
+project after its first commit, every write that adds a record ID fails with
+`KeyError: '.ekk/realm.yaml'`; nothing is published or changed. Reading the
+current realm still works. Place a contained realm in the first commit of its
+repository, or use a standalone store, until the realm's historical horizon is
+defined. The behaviour is pinned by
+`tests/test_contained_store.py::ContainedRealmHistoryHorizonTests`.
 The disposable YAML parse cache holds at most 8,192 entries and 64 MiB of retained
 graph storage per codec, so a migrated working set can retain both current and
 historical alias modes. Exact-byte checks, defensive copies, schema validation
@@ -218,14 +291,20 @@ Caller identity is optional host configuration in private `config/callers.yaml`:
 schema: ekk.callers/0.1
 codex_profile_fleet: /absolute/path/to/owner-profile-registry.yaml
 adapters: [private-gateway]
+environments:
+  claude-code: {CLAUDECODE: "1"}
 ```
 
 The Codex adapter matches the process's exact `CODEX_HOME` against enrolled homes
-in the owner's `lifeos.codex-profile-fleet/1` registry. A gateway may select only an
-explicitly registered adapter ID from its private configuration. Missing or
-unrecognized callers stay `unknown`; request fields and EKK role names cannot
-supply a caller label. Environment attribution is not authentication or an OS
-sandbox. No Codex credentials, transcripts, profile state or permissions are copied.
+in the owner's `lifeos.codex-profile-fleet/1` registry. Another coding agent is
+registered under `environments` by the variables its host sets for every command
+it runs; Claude Code sets `CLAUDECODE=1`. Markers apply only outside Codex (no
+`CODEX_HOME`), and a process that matches several of them stays `unknown`. A
+gateway may select only an explicitly registered adapter ID from its private
+configuration. Missing or unrecognized callers stay `unknown`; request fields and
+EKK role names cannot supply a caller label. Environment attribution is not
+authentication or an OS sandbox. No host credentials, transcripts, profile state
+or permissions are copied.
 
 ## Independent owner backup and isolated recovery
 

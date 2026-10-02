@@ -137,7 +137,7 @@ class LockContentionTests(unittest.TestCase):
         error = io.StringIO()
         observed_call('context', lambda: {'ok': True})
         with held_lock(self.writer), held_lock(self.root/'data/operations/.lock'), redirect_stderr(error):
-            code = main(['retain', '--root', str(self.root/'realm'), '--json', str(request)])
+            code = main(['retain', '--wait', '--root', str(self.root/'realm'), '--json', str(request)])
         result = json.loads(error.getvalue())
         self.assertEqual(2, code)
         self.assertEqual('error', result['status'])

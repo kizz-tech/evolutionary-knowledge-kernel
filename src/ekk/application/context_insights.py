@@ -132,9 +132,14 @@ def context_insights(records, current_records, *, realm_id, resolve_reference,
                      limit=32, incomplete=False, byte_budget=8192):
     """Project bounded insights using only exact references in emitted records.
 
+    A superseded target is the one reference that may name a record outside the
+    emitted rows; it must still resolve through the caller's authorized resolver.
+
     ``limit`` caps the total rows across all three lists. Challenges and changed
     grounds precede statement summaries. Missing dependencies and truncation
     produce only generic flags, never omitted IDs, titles, digests, or counts.
+    ``incomplete`` covers any truncation; ``relations_incomplete`` is true only
+    when a challenge, a changed ground or a reference behind one may be missing.
     ``governs`` is copied from each emitted row; disagreements cannot alter it.
     Supersession links are recorded provenance, not an inferred adjudication.
     """
@@ -187,8 +192,12 @@ def context_insights(records, current_records, *, realm_id, resolve_reference,
                                         'status': 'pinned_ground_differs'})
                 seen_changes.add(marker)
         for ref in _links(metadata, 'supersedes'):
-            target = visible(ref)
-            if target is not None:
+            # Optional reading names its replaced predecessor without emitting
+            # its body, so a readable target is listed even when not emitted.
+            target = resolve(ref)
+            if target is None:
+                missing = True
+            else:
                 target_ref = _exact(target, realm_id)
                 supersedes[_key(target_ref)] = target_ref
         if metadata['kind'] in CHALLENGE_KINDS:
@@ -213,14 +222,16 @@ def context_insights(records, current_records, *, realm_id, resolve_reference,
                            'governs': bool(row.get('governs', False))})
     output = {}
     remaining = limit
-    omitted = missing
+    omitted = relations_cut = missing
     for name, rows in (('challenges', challenges), ('changed_grounds', changed_grounds),
                        ('statements', statements)):
         output[name] = rows[:remaining]
         omitted |= len(rows) > remaining
+        relations_cut |= name != 'statements' and len(rows) > remaining
         remaining -= len(output[name])
     result = {'schema': 'ekk.context-insights/0.1', **output,
             'incomplete': bool(omitted), 'omitted': bool(omitted),
+            'relations_incomplete': bool(relations_cut),
             'coverage': 'emitted projection only', 'authority_effect': 'none',
             'adjudication': 'not_inferred', 'byte_budget': byte_budget}
     def size(): return len(json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode())
@@ -228,6 +239,8 @@ def context_insights(records, current_records, *, realm_id, resolve_reference,
         for name in ('statements', 'changed_grounds', 'challenges'):
             if result[name]:
                 result[name].pop()
+                # Setting the flag never grows the output: true is shorter than false.
+                result['relations_incomplete'] |= name != 'statements'
                 break
         result['incomplete'] = result['omitted'] = True
     return result

@@ -4,16 +4,19 @@ Published commits are atomic snapshots; arbitrary filesystem readers are not.
 The flock coordinates cooperating writers, not external editors or other hosts.
 Runtime journals are durable data and must be backed up with the repository.
 """
+from collections import OrderedDict
 from contextlib import contextmanager, nullcontext
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import fcntl
 import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import unicodedata
 
 from ekk.model import (Conflict, DirtyWorkingTree, IdempotencyConflict,
@@ -21,6 +24,73 @@ from ekk.model import (Conflict, DirtyWorkingTree, IdempotencyConflict,
 from .file_lock import acquire_lock
 
 REF = "refs/ekk/published"
+_OBJECT_ID = re.compile(rb"([0-9a-f]{40})\n?")
+
+
+class _Memo:
+    """Process-wide memo of immutable Git facts, bounded by a weight per entry.
+
+    Object IDs fix what they name: a commit its tree and parents, a head the
+    history behind it, a blob its digest. Entries never go stale; publication
+    only adds new IDs, and refs themselves are always read again. Bounds keep a
+    long-running host small.
+    """
+
+    def __init__(self, limit, weight=lambda value: 1):
+        self.items, self.limit, self.weight, self.total = OrderedDict(), limit, weight, 0
+        self.lock = threading.Lock()
+
+    def get(self, key, read=None):
+        with self.lock:
+            entry = self.items.get(key)
+            if entry is not None:
+                self.items.move_to_end(key)
+                return entry[0]
+        if read is None:
+            return None
+        value = read()
+        self.put(key, value)
+        return value
+
+    def put(self, key, value):
+        weight = self.weight(value)
+        if weight > self.limit:
+            return
+        with self.lock:
+            previous = self.items.pop(key, None)
+            if previous is not None:
+                self.total -= previous[1]
+            self.items[key] = (value, weight)
+            self.total += weight
+            while self.total > self.limit:
+                self.total -= self.items.popitem(last=False)[1][1]
+
+
+_COMMIT_FILES = _Memo(256 * 1024 * 1024, lambda files: sum(len(raw) for raw in files.values()))
+_TREES = _Memo(1_000_000, len)
+_HISTORIES = _Memo(16)
+_PARENTS = _Memo(100_000)
+
+
+def _loose_ref(git_dir, ref):
+    """Object ID from a loose ref file, or None so that Git resolves the ref.
+
+    In the files backend a loose ref takes precedence over packed-refs. Anything
+    else (packed or reftable refs, symbolic refs, symlinks) goes to Git.
+    """
+    try:
+        path = Path(git_dir)
+        for part in ref.split("/"):
+            path = path / part
+            if stat.S_ISLNK(os.lstat(path).st_mode):
+                return None
+        info = os.lstat(path)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 64:
+            return None
+        match = _OBJECT_ID.fullmatch(path.read_bytes())
+    except (OSError, ValueError):
+        return None
+    return match.group(1).decode() if match else None
 
 
 def _mkdir_durable(path):
@@ -253,7 +323,16 @@ class GitStore:
             finally:
                 fcntl.flock(stream, fcntl.LOCK_UN)
 
+    def _metadata_dir(self):
+        return getattr(self, "git_dir", None) or self.path / ".git"
+
+    def _memo_scope(self):
+        return str(self._metadata_dir()), getattr(self, "prefix", "")
+
     def _head(self):
+        loose = _loose_ref(self._metadata_dir(), self.publication_ref)
+        if loose is not None:
+            return loose
         result = self._git("rev-parse", "--verify", self.publication_ref, check=False)
         return result.stdout.decode().strip() if not result.returncode else None
 
@@ -283,19 +362,24 @@ class GitStore:
                 raise ValidationError("File/directory path collision")
 
     def _read_tree(self, revision):
-        entries = {}
-        result = self._git("ls-tree", "-rz", "--full-tree", revision).stdout
-        for entry in result.split(b"\x00"):
-            if not entry:
-                continue
-            meta, name = entry.split(b"\t", 1)
-            mode, kind, oid = meta.split()
-            if mode not in (b"100644", b"100755") or kind != b"blob":
-                raise StoreError("Snapshot contains a symlink or unsupported Git object")
-            name = name.decode("utf-8")
-            self._path(name, inspect=False)
-            entries[name] = oid
-        return entries
+        def read():
+            entries = {}
+            result = self._git("ls-tree", "-rz", "--full-tree", revision).stdout
+            for entry in result.split(b"\x00"):
+                if not entry:
+                    continue
+                meta, name = entry.split(b"\t", 1)
+                mode, kind, oid = meta.split()
+                if mode not in (b"100644", b"100755") or kind != b"blob":
+                    raise StoreError("Snapshot contains a symlink or unsupported Git object")
+                name = name.decode("utf-8")
+                self._path(name, inspect=False)
+                entries[name] = oid
+            return entries
+        # Keyed by the given commit or tree ID; branch names never reach this reader.
+        if self._fresh_reads or not re.fullmatch(r"[0-9a-f]{40}", revision):
+            return read()
+        return dict(_TREES.get((str(self._metadata_dir()), revision), read))
 
     def _read_blobs(self, oids):
         # Object IDs, never record-controlled expressions, enter the batch protocol.
@@ -324,7 +408,43 @@ class GitStore:
         return {name: objects[oid] for name, oid in tree.items()}
 
     def _read_commit(self, revision):
-        return {"revision": revision, "files": self._read_files(self._read_tree(revision))}
+        if self._fresh_reads:
+            return {"revision": revision, "files": self._read_files(self._read_tree(revision))}
+        files = _COMMIT_FILES.get((self._memo_scope(), revision),
+                                  lambda: self._read_files(self._read_tree(revision)))
+        # A fresh mapping per call: callers may build candidates from it.
+        return {"revision": revision, "files": dict(files)}
+
+    def _history_of(self, head):
+        def read():
+            revisions = self._git("rev-list", head).stdout.decode().splitlines()
+            return tuple(revisions), frozenset(revisions)
+        return read() if self._fresh_reads else _HISTORIES.get((str(self._metadata_dir()), head), read)
+
+    def _is_ancestor(self, revision, head):
+        if self._fresh_reads:
+            return not self._git("merge-base", "--is-ancestor", revision, head, check=False).returncode
+        # rev-list of the head is exactly the set merge-base --is-ancestor accepts.
+        return revision == head or revision in self._history_of(head)[1]
+
+    def _parents(self, revision):
+        def read():
+            return tuple(self._git("rev-list", "--parents", "-n", "1", revision).stdout.decode().split()[1:])
+        return read() if self._fresh_reads else _PARENTS.get((str(self._metadata_dir()), revision), read)
+
+    @property
+    def _fresh_reads(self):
+        return getattr(self, "_recovering", False)
+
+    @contextmanager
+    def _reading_durable_state(self):
+        """Recovery checks what Git holds on disk now, so it bypasses every memo."""
+        previous = getattr(self, "_recovering", False)
+        self._recovering = True
+        try:
+            yield
+        finally:
+            self._recovering = previous
 
     def snapshot(self, revision=None):
         head = self._head()
@@ -333,15 +453,33 @@ class GitStore:
         revision = revision or head
         if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
             raise ValidationError("Historical revision must be a full Git commit ID")
-        if self._git("merge-base", "--is-ancestor", revision, head, check=False).returncode:
+        if not self._is_ancestor(revision, head):
             raise StoreError("Revision is not in published history")
         return self._read_commit(revision)
+
+    def file_at(self, revision, name):
+        """Exact bytes of one file in a published commit: snapshot(revision)['files'][name].
+
+        The same ancestry and tree checks apply; only that file's blob is read.
+        """
+        head = self._head()
+        if head is None:
+            raise StoreError("Store has no published snapshot")
+        if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+            raise ValidationError("Historical revision must be a full Git commit ID")
+        if not self._is_ancestor(revision, head):
+            raise StoreError("Revision is not in published history")
+        files = _COMMIT_FILES.get((self._memo_scope(), revision))
+        if files is not None:
+            return files[name]
+        oid = self._read_tree(revision)[name]
+        return self._read_blobs([oid])[oid]
 
     def history(self):
         head = self._head()
         if head is None:
             raise StoreError("Store has no published snapshot")
-        return self._git("rev-list", head).stdout.decode().splitlines()
+        return list(self._history_of(head)[0])
 
     def _read_evidence(self, revision):
         # Operation evidence is a whole Git tree, including for contained realms.
@@ -462,11 +600,217 @@ class GitStore:
         self._checkpoint("complete")
         return journal["receipt"]
 
-    def _recover(self):
+    def _recover(self, *, full=True):
+        """Complete interrupted operations after verifying their durable evidence.
+
+        Every pass compares each runtime journal with the immutable operation
+        evidence in Git, so no file in the runtime directory vouches for another.
+        A full pass also audits the trees and the bytes of every historical
+        snapshot. A write uses ``full=False``: for operations that an earlier
+        pass audited, and whose ref and runtime journal are unchanged, only that
+        tree and blob audit is skipped. Explicit recovery, restore activation
+        and a missing or foreign checkpoint audit everything.
+
+        With ``full=False`` the working tree is compared with the head
+        projection only when a journal was reconstructed. A new write checks the
+        tree against its own base in ``apply``; a replay or ``lookup`` reports
+        the recorded publication and does not vouch for the working tree.
+        """
+        with self._reading_durable_state():
+            return self._recover_durable_state(full)
+
+    def _verified_path(self):
+        return self.runtime_dir / "verified-operations.json"
+
+    def _verifier(self):
+        # Verification rules live in the store adapters; a change re-audits history.
+        sources = [Path(__file__), Path(__file__).with_name("contained_store.py")]
+        return digest(b"\0".join(path.read_bytes() for path in sources if path.is_file()))
+
+    def _load_checkpoint(self):
+        """The audit checkpoint of this store and verifier, or None."""
+        path = self._verified_path()
+        try:
+            if path.is_symlink() or not path.is_file():
+                return None
+            value = json.loads(path.read_text())
+            if (not isinstance(value, dict) or value.get("schema") != "ekk.verified-operations/0.2"
+                    or value.get("store") != str(self.path) or value.get("verifier") != self._verifier()
+                    or not isinstance(value.get("operations"), dict)
+                    or datetime.fromisoformat(value.get("audited_at")).tzinfo is None):
+                return None
+            return value
+        except (OSError, TypeError, ValueError):
+            return None
+
+    def _load_verified(self):
+        checkpoint = self._load_checkpoint()
+        if checkpoint is None:
+            return {}
+        return {key: row for key, row in checkpoint["operations"].items()
+                if isinstance(row, dict) and all(isinstance(row.get(k), str) for k in ("evidence", "revision", "journal"))}
+
+    def _save_verified(self, operations, audited_at):
+        _atomic(self._verified_path(), json.dumps({
+            "schema": "ekk.verified-operations/0.2", "store": str(self.path), "verifier": self._verifier(),
+            "audited_at": audited_at, "operations": operations}, sort_keys=True).encode())
+
+    def _forget_verified(self):
+        """Durably remove the checkpoint, so that the next pass audits everything."""
+        path = self._verified_path()
+        if path.is_symlink() or path.exists():
+            path.unlink()
+            fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+
+    def audit_due(self, days=7):
+        """Whether the last successful full audit of operation evidence is missing or old.
+
+        True without a checkpoint, with one written for another store or by
+        other verifying code, and when its audit is older than ``days``.
+        """
+        checkpoint = self._load_checkpoint()
+        if checkpoint is None:
+            return True
+        return datetime.now(timezone.utc) - datetime.fromisoformat(checkpoint["audited_at"]) >= timedelta(days=days)
+
+    def _read_operation_journals(self, evidences):
+        """``operation.json`` of every evidence commit, from one Git process.
+
+        Absent, non-blob and unparsable evidence is None: its operation then
+        takes the complete verification, which reports the failure.
+        """
+        names = list(dict.fromkeys(evidences))
+        journals = dict.fromkeys(names)
+        if not names:
+            return journals
+        batch = self._git("cat-file", "--batch",
+                          data=b"".join((name + ":operation.json\n").encode() for name in names)).stdout
+        offset = 0
+        for name in names:
+            end = batch.find(b"\n", offset)
+            header = batch[offset:end].split() if end >= 0 else []
+            offset = end + 1
+            if len(header) == 2 and header[1] == b"missing":
+                continue
+            if len(header) != 3 or not re.fullmatch(rb"[0-9a-f]{40}", header[0]) or not header[2].isdigit():
+                raise StoreError("Invalid Git operation evidence batch response")
+            size = int(header[2])
+            if batch[offset + size:offset + size + 1] != b"\n":
+                raise StoreError("Truncated Git operation evidence batch response")
+            if header[1] == b"blob":
+                try:
+                    value = json.loads(batch[offset:offset + size])
+                except ValueError:
+                    value = None
+                journals[name] = value if isinstance(value, dict) else None
+            offset += size + 1
+        if offset != len(batch):
+            raise StoreError("Unexpected bytes after Git operation evidence batch")
+        return journals
+
+    @staticmethod
+    def _evidence_binds(journal, key_hash):
+        """What recorded evidence states about itself; needs no further Git read."""
+        receipt, request = journal["receipt"], journal["request"]
+        return (journal["state"] == "prepared" and receipt["revision"] == journal["revision"]
+                and receipt["idempotency_key_digest"] == key_hash
+                and receipt["base"] == journal["base"]
+                and request["base"] == journal["base"]
+                and request["principal"] == receipt["principal"]
+                and request["policy_digest"] == receipt["policy_digest"]
+                and digest(json.dumps(request, sort_keys=True).encode()) == journal["request_digest"]
+                and bool(re.fullmatch(r"[0-9a-f]{64}", journal["request_digest"])))
+
+    @staticmethod
+    def _receipt_fields(journal):
+        receipt = journal["receipt"]
+        return (receipt["state"] == "published" and isinstance(receipt["principal"], str) and bool(receipt["principal"])
+                and isinstance(journal["request"]["changes"], dict)
+                and isinstance(receipt["policy_digest"], str)
+                and (journal["base"] is None or bool(re.fullmatch(r"[0-9a-f]{64}", receipt["policy_digest"])))
+                and datetime.fromisoformat(receipt["recorded_at"]).tzinfo is not None)
+
+    def _audited_before(self, earlier, evidence, recorded, path, key_hash):
+        """Whether only the tree and blob audit of this operation may be skipped.
+
+        The checkpoint row names the audited evidence commit and target. The
+        completed runtime journal is still compared with that evidence, read
+        from Git in this pass; a row cannot make a changed journal acceptable.
+        """
+        if not earlier or earlier["evidence"] != evidence or not isinstance(recorded, dict) or not path.is_file():
+            return False
+        raw = path.read_bytes()
+        if digest(raw) != earlier["journal"]:
+            return False
+        try:
+            runtime = json.loads(raw)
+            return (isinstance(runtime, dict) and runtime.get("state") == "complete"
+                    and runtime | {"state": "prepared"} == recorded
+                    and recorded["revision"] == earlier["revision"]
+                    and self._evidence_binds(recorded, key_hash) and self._receipt_fields(recorded))
+        except (KeyError, TypeError, ValueError):
+            return False
+
+    def _recover_durable_state(self, full=True):
         receipts = []
+        checkpoint = None if full else self._load_checkpoint()
+        try:
+            verified, refs, reconstructed, completed_projection = self._verify_operations(
+                {} if checkpoint is None else self._load_verified())
+        except DirtyWorkingTree:
+            raise
+        except StoreError:
+            # The audit refused this operation evidence. A checkpoint from an
+            # earlier pass must not keep vouching for it: without one, every
+            # write audits in full and refuses until an explicit recovery passes.
+            if full:
+                self._forget_verified()
+            raise
+        known_keys = {line.split()[0].rsplit("/", 1)[-1] for line in refs}
+        journals = sorted((self.runtime_dir / "journals").glob("*.json"))
+        if any(path.stem not in known_keys for path in journals):
+            raise RecoveryConflict("Runtime journal has no immutable operation evidence")
+        # Every operation was audited when no checkpoint was used. The audit is
+        # recorded now: a projection blocked by an external edit, or the
+        # working-tree comparison below, is not part of it and must not repeat it.
+        if checkpoint is None:
+            self._save_verified(verified, datetime.now(timezone.utc).isoformat())
+        elif verified != self._load_verified():
+            self._save_verified(verified, checkpoint["audited_at"])
+        for path in journals:
+            if path.is_symlink():
+                raise StoreError("Invalid journal path")
+            journal = json.loads(path.read_text())
+            if journal["state"] != "complete":
+                from .operation_diagnostics import observe_recovery
+                receipts.append(observe_recovery(lambda: self._finish(path, journal), journal['receipt']))
+                completed_projection = None
+        if reconstructed and self._head():
+            completed_projection = self._head()
+        if completed_projection is not None and (full or reconstructed):
+            # A new write checks the working tree against its own base instead;
+            # a replay reports the recorded publication only.
+            files = self._read_commit(completed_projection)["files"]
+            self._check_clean(files, files)
+        return receipts
+
+    def _verify_operations(self, known):
+        """Verify every operation ref; ``known`` rows skip only the tree and blob audit."""
         reconstructed = False
         completed_projection = None
         trees, blob_digests = {}, {}
+        verified = {}
+        ancestry = {}
+
+        def published(revision, head):
+            # One fresh history read per head; identical to merge-base --is-ancestor.
+            if head not in ancestry:
+                ancestry[head] = frozenset(self._git("rev-list", head).stdout.decode().split())
+            return revision in ancestry[head]
 
         def verified_tree(revision):
             if revision is None:
@@ -484,6 +828,9 @@ class GitStore:
         # Git retains request/receipt evidence independently of runtime journals.
         # A ref created before the journal write is also a recoverable operation.
         refs = self._git("for-each-ref", "--format=%(refname) %(objectname)", self.operations_ref).stdout.decode().splitlines()
+        recorded = self._read_operation_journals(line.split()[1] for line in refs)
+        # Cooperating writers hold the lock, and nothing below moves the head.
+        current = self._head()
         for line in refs:
             ref, evidence = line.split()
             key_hash = ref.rsplit("/", 1)[-1]
@@ -492,32 +839,26 @@ class GitStore:
             path = self.runtime_dir / "journals" / (key_hash + ".json")
             if path.is_symlink():
                 raise StoreError("Invalid journal path")
+            earlier = known.get(key_hash)
+            if self._audited_before(earlier, evidence, recorded[evidence], path, key_hash):
+                # Audited before with this evidence; the journal still equals it.
+                if not current or not published(earlier["revision"], current):
+                    raise RecoveryConflict("Runtime journal does not match durable operation evidence")
+                verified[key_hash] = earlier
+                continue
             try:
                 journal = json.loads(self._read_evidence(evidence)["files"]["operation.json"])
                 revision = journal["revision"]
-                receipt = journal["receipt"]
-                if (journal["state"] != "prepared" or receipt["revision"] != revision
-                        or receipt["idempotency_key_digest"] != key_hash
-                        or receipt["base"] != journal["base"]
-                        or journal["request"]["base"] != journal["base"]
-                        or journal["request"]["principal"] != receipt["principal"]
-                        or journal["request"]["policy_digest"] != receipt["policy_digest"]
-                        or digest(json.dumps(journal["request"], sort_keys=True).encode()) != journal["request_digest"]
-                        or self._git("rev-list", "--parents", "-n", "1", revision).stdout.decode().split()[1:] != ([journal["base"]] if journal["base"] else [])
-                        or not re.fullmatch(r"[0-9a-f]{64}", journal["request_digest"])
-                        or self._git("rev-list", "--parents", "-n", "1", evidence).stdout.decode().split()[1:] != [revision]):
+                if (not self._evidence_binds(journal, key_hash)
+                        or list(self._parents(revision)) != ([journal["base"]] if journal["base"] else [])
+                        or list(self._parents(evidence)) != [revision]):
                     raise ValueError("Invalid operation evidence")
             except (KeyError, TypeError, ValueError) as exc:
                 raise RecoveryConflict("Operation ref lacks valid durable recovery evidence") from exc
             request = journal["request"]
             try:
-                if (receipt["state"] != "published" or not isinstance(receipt["principal"], str) or not receipt["principal"]
-                        or not isinstance(request["changes"], dict)
-                        or not isinstance(receipt["policy_digest"], str)
-                        or (journal["base"] is not None and not re.fullmatch(r"[0-9a-f]{64}", receipt["policy_digest"]))):
+                if not self._receipt_fields(journal):
                     raise ValueError("Invalid receipt fields")
-                if datetime.fromisoformat(receipt["recorded_at"]).tzinfo is None:
-                    raise ValueError("Invalid receipt time")
                 before = verified_tree(journal["base"])
                 after = verified_tree(revision)
                 expected = dict(before)
@@ -533,44 +874,30 @@ class GitStore:
                     raise ValueError("Target contains changes outside the recorded request")
             except (KeyError, TypeError, ValueError) as exc:
                 raise RecoveryConflict("Operation evidence does not match its target snapshot") from exc
-            current = self._head()
             if path.exists():
                 try:
                     runtime = json.loads(path.read_text())
                     if not isinstance(runtime, dict) or runtime.get("state") not in ("prepared", "complete") or runtime | {"state": "prepared"} != journal:
                         raise ValueError("Runtime journal differs from immutable evidence")
-                    if runtime["state"] == "complete" and (not current or self._git("merge-base", "--is-ancestor", revision, current, check=False).returncode):
+                    if runtime["state"] == "complete" and (not current or not published(revision, current)):
                         raise ValueError("Completed operation is not in published history")
                     if runtime["state"] == "complete" and revision == current:
                         completed_projection = revision
+                    if runtime["state"] == "complete":
+                        verified[key_hash] = {"evidence": evidence, "revision": revision, "journal": digest(path.read_bytes())}
                 except (TypeError, ValueError) as exc:
                     raise RecoveryConflict("Runtime journal does not match durable operation evidence") from exc
                 continue
-            if current and current != revision and not self._git("merge-base", "--is-ancestor", revision, current, check=False).returncode:
+            if current and current != revision and published(revision, current):
                 # Historical publication is proven by ancestry. Do not replay an
                 # old projection over a later snapshot; verify the current view below.
                 journal["state"] = "complete"
             self._save(path, journal)
             reconstructed = True
-        known_keys = {line.split()[0].rsplit("/", 1)[-1] for line in refs}
-        for path in sorted((self.runtime_dir / "journals").glob("*.json")):
-            if path.stem not in known_keys:
-                raise RecoveryConflict("Runtime journal has no immutable operation evidence")
-            if path.is_symlink():
-                raise StoreError("Invalid journal path")
-            journal = json.loads(path.read_text())
-            if journal["state"] != "complete":
-                from .operation_diagnostics import observe_recovery
-                receipts.append(observe_recovery(lambda: self._finish(path, journal), journal['receipt']))
-                completed_projection = None
-        if reconstructed and self._head():
-            completed_projection = self._head()
-        if completed_projection is not None:
-            files = self._read_commit(completed_projection)["files"]
-            self._check_clean(files, files)
-        return receipts
+        return verified, refs, reconstructed, completed_projection
 
     def recover(self):
+        """Explicit recovery: the full audit, then the working-tree projection check."""
         with self._lock():
             return self._recover()
 
@@ -595,14 +922,19 @@ class GitStore:
                 "changes": {name: digest(value) if value is not None else None for name, value in sorted(changes.items())}}
 
     def lookup(self, changes, *, base, idempotency_key, principal, policy_digest):
-        """Return a prior exact request after the application rechecks authority."""
+        """Return a prior exact request after the application rechecks authority.
+
+        The receipt reports the recorded publication, still present in published
+        history. It says nothing about the working-tree projection: new writes
+        and explicit recovery check that.
+        """
         self._validate_files(changes, deletes=True)
         if not all(isinstance(v, str) and v for v in (base, idempotency_key, principal, policy_digest)):
             raise ValidationError("base, idempotency_key, principal and policy_digest are required")
         if not re.fullmatch(r"[0-9a-f]{64}", policy_digest):
             raise ValidationError("policy_digest must be a SHA-256 hex digest")
         with self._lock():
-            self._recover()
+            self._recover(full=False)
             path = self.runtime_dir / "journals" / (digest(idempotency_key.encode()) + ".json")
             if not path.exists():
                 return None
@@ -647,13 +979,19 @@ class GitStore:
         return self._observed_receipt(self._finish(path, journal) | {"idempotency_key": key}, replayed=False)
 
     def apply(self, changes, *, base, idempotency_key, principal, policy_digest):
+        """Publish ``changes`` on exactly ``base``, or replay the receipt of this key.
+
+        A new write requires a working tree and index equal to ``base``. A
+        replay of an already recorded key returns its receipt without reading
+        the working tree; explicit recovery and the next new write check it.
+        """
         self._validate_files(changes, deletes=True)
         if not all(isinstance(v, str) and v for v in (base, idempotency_key, principal, policy_digest)):
             raise ValidationError("base, idempotency_key, principal and policy_digest are required")
         if not re.fullmatch(r"[0-9a-f]{64}", policy_digest):
             raise ValidationError("policy_digest must be a SHA-256 hex digest")
         with self._lock():
-            self._recover()
+            self._recover(full=False)
             old = self.snapshot(base)["files"]
             files = dict(old)
             for name, value in changes.items():

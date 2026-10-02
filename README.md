@@ -2,12 +2,20 @@
 
 **A personal way into work, shared continuity, and methods that can improve with experience.**
 
-The 0.8 workflow adds proportionate entry, discoverable intentions, versioned
-continuation, a durable publication queue, read-only author notes and explicit
-local follow-ups. Start with [continuous work](docs/continuous-work.md). A local
+The 0.8 and 0.9 increments add proportionate entry, discoverable intentions,
+versioned continuation, a durable publication queue, read-only author notes,
+explicit local follow-ups and experience recorded from the host's own events. Start with [continuous work](docs/continuous-work.md). A local
 edit with sufficient context needs no EKK call and no new record. Practical
 software, research and personal-work guidance is optional; usefulness is assessed
 through ordinary work, feedback and selected logs.
+
+[Release 0.9.0](docs/release-notes-0.9.0.md) records experience from the host's
+own events (a session's final report, the owner's corrections), shows current
+knowledge first, delivers one [agent contract](docs/agent-contract.md) at session
+start and measures itself through the owner's weekly review. It implements the
+[1.0 release package](docs/releases/README.md); consult its
+[status](docs/releases/1.0/status.md) for delivered and measured coverage, since a
+specification is not a delivery claim.
 
 Start from an intention: investigate a question, continue a change, or prepare a
 handoff. EKK returns authorized context, accepted commitments, results, questions
@@ -71,7 +79,7 @@ operations and their boundaries.
 
 The local kernel retains stable IDs, exact source bytes, versions, provenance,
 controlled writes and acceptance receipts. The record format remains **0.1**.
-Runtime **0.7.0** has one active CLI; old runtimes are explicit historical replay
+Runtime **0.9.0** has one active CLI; old runtimes are explicit historical replay
 artifacts outside the installed package. No company data is moved into personal
 storage by entry or this migration.
 
@@ -84,7 +92,8 @@ OS sandbox.
 [Daily reliability](docs/daily-reliability.md) covers result retention with exact
 read-back, private diagnostics, owner backup/restore, explicit challenges and
 current repository evidence. [Release 0.7](docs/release-notes-0.7.md) includes that
-increment and the Belief Runtime preview. Human and AI statements remain fallible; acceptance and
+increment and the Belief Runtime preview; [0.8](docs/release-notes-0.8.md) adds
+continuous work and [0.8.4](docs/release-notes-0.8.4.md) writes that finish. Human and AI statements remain fallible; acceptance and
 execution authority follow current ownership and grants.
 
 ## Evidence and research

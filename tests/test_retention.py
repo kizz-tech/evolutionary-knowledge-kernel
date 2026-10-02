@@ -173,13 +173,13 @@ print(json.dumps(capture_once(app,b'exact\\r\\nsource\\x00\\xff',title='Syntheti
         self.assertEqual(receipt['revision'], self.app.store.snapshot()['revision'])
 
     def test_failure_before_store_journal_is_visible(self):
-        args = parser().parse_args(['capture', '--root', str(self.root/'realm'), '--scope', 'scope'])
-        with self.assertRaises(ValueError): dispatch(args, {'body': 'missing key'})
+        args = parser().parse_args(['capture', '--root', str(self.root/'realm'), '--scope', 'scope', '--wait'])
+        with self.assertRaises(ValueError): dispatch(args, {'body': 'private text', 'title': ''})  # rejected before the store
         rows = [json.loads(line) for line in (self.root/'data/operations/operations.jsonl').read_text().splitlines()]
         failures = [row for row in rows if row.get('result') == 'error']
         self.assertEqual(1, len(failures))
         self.assertFalse(failures[0]['mutated'])
-        self.assertNotIn('missing key', json.dumps(rows))
+        self.assertNotIn('private text', json.dumps(rows))
 
 
 if __name__ == '__main__': unittest.main()

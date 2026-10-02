@@ -9,6 +9,9 @@ import stat
 import time
 import uuid
 
+# Hosts whose scheduler can hold a waiting task's automation.
+AUTOMATION_HOSTS=frozenset({'codex','claude-code'})
+
 
 def canonical(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False)
@@ -93,14 +96,28 @@ class OperationalStore:
         return {'schema':'ekk.outbox/0.1','realm':self.realm,'operations':result,
                 'authority':'Local pending is durable host storage, not canonical publication or acceptance.'}
 
-    def drain(self, scopes, publish, *, limit=10):
-        """Single publisher. A lost response replays the same frozen logical key."""
+    def drain(self, scopes, publish, *, limit=10, prepare=None):
+        """Single publisher. A lost response replays the same frozen logical key.
+
+        ``prepare`` runs under the worker lock before anything is published; when
+        it returns a failure ({'state': 'failed', 'error': ...}) nothing is
+        published and every waiting request in these scopes is marked
+        needs_attention with that error, so a status check shows it.
+        """
         if type(limit) is not int or not 1<=limit<=100:raise ValueError('Bounded drain limit required')
         from .file_lock import acquire_lock
         from .command_line import error_code
         fd=os.open(self.directory/'worker.lock',os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
         with os.fdopen(fd,'a+b') as lock:
             acquire_lock(lock,kind='outbox_worker')
+            verdict=prepare() if prepare is not None else None
+            if isinstance(verdict,dict) and verdict.get('state')=='failed':
+                error={'code':verdict.get('error','store_audit_failed'),'message':verdict.get('message','The store failed its audit'),
+                       'outcome':'not attempted; resolve the store and run ekk queue retry'}
+                for row in self.db.execute("SELECT key,scopes FROM outbox WHERE state IN ('local_pending','retry_pending','published_verification_pending')").fetchall():
+                    if set(json.loads(row['scopes']))<=set(scopes):
+                        self.db.execute("UPDATE outbox SET state='needs_attention',error=?,updated=? WHERE key=?",(canonical(error),time.time(),row['key']))
+                return self.status(scopes)
             # Holding the process lock proves no live worker owns these claims.
             self.db.execute("UPDATE outbox SET state='local_pending' WHERE state='publishing'")
             rows=self.db.execute("SELECT * FROM outbox WHERE state IN ('local_pending','retry_pending','published_verification_pending') AND next_attempt<=? ORDER BY updated LIMIT ?",(time.time(),limit)).fetchall()
@@ -173,7 +190,7 @@ class OperationalStore:
                     receipt=request.get('host_receipt')
                     if not value.get('wait') or not isinstance(receipt,dict) or set(receipt)!={'host','automation_id','receipt'}:
                         raise ValueError('An actual host automation receipt and waiting task are required')
-                    if receipt['host']!='codex' or not all(isinstance(v,str) and 0<len(v)<=16000 for v in receipt.values()):raise ValueError('Invalid host receipt')
+                    if not all(isinstance(v,str) and 0<len(v)<=16000 for v in receipt.values()) or receipt['host'] not in AUTOMATION_HOSTS:raise ValueError('Invalid host receipt')
                     value['wait'].update(registration='receipt_recorded',host_receipt=receipt)
                 elif operation=='external-attempt':
                     if value.get('external_action',{} ) and value['external_action'].get('state')=='unknown':

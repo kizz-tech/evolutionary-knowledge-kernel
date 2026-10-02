@@ -19,6 +19,8 @@ class DiagnosticIntegrationTests(unittest.TestCase):
         env = patch.dict(os.environ, {'EKK_DATA_HOME': str(self.root/'data'),
             'EKK_CONFIG_HOME': str(self.root/'config'), 'EKK_CACHE_HOME': str(self.root/'cache')})
         env.start(); self.addCleanup(env.stop)
+        # The suite itself runs inside coding agents; attribution must not depend on that.
+        for marker in ('CODEX_HOME', 'CLAUDECODE'): os.environ.pop(marker, None)
         self.config = self.root/'config'; self.config.mkdir(mode=0o700)
 
     def call(self, op, request=None, *, render=None, **options):
@@ -49,6 +51,33 @@ class DiagnosticIntegrationTests(unittest.TestCase):
         self.assertEqual('private-gateway', trusted_caller('private-gateway').profile)
         self.assertIsNone(trusted_caller('alpha'))
         self.assertNotIn(str(self.root), json.dumps(self.rows()))
+
+    def test_registered_environment_markers_attribute_other_coding_agents(self):
+        fleet = {'schema_version':'lifeos.codex-profile-fleet/1', 'profiles': {'alpha':{'home':str(self.root/'alpha')}}}
+        (self.root/'fleet.json').write_text(json.dumps(fleet))
+        config = {'schema':'ekk.callers/0.1', 'codex_profile_fleet': str(self.root/'fleet.json'),
+                  'adapters':['private-gateway'],
+                  'environments':{'claude-code':{'CLAUDECODE':'1'}, 'other-agent':{'OTHER_AGENT':'1'}}}
+        path = self.config/'callers.yaml'; path.write_text(json.dumps(config)); path.chmod(0o600)
+        with patch.dict(os.environ, {'CLAUDECODE':'1'}):
+            self.assertEqual('claude-code', trusted_caller().profile)
+            observed_call('context', lambda:{'ok':True})
+            # A Codex process keeps the Codex rule, registered or not.
+            with patch.dict(os.environ, {'CODEX_HOME':str(self.root/'alpha')}):
+                self.assertEqual('alpha', trusted_caller().profile)
+            with patch.dict(os.environ, {'CODEX_HOME':str(self.root/'unregistered')}):
+                self.assertIsNone(trusted_caller())
+            with patch.dict(os.environ, {'OTHER_AGENT':'1'}):
+                self.assertIsNone(trusted_caller())
+        with patch.dict(os.environ, {'CLAUDECODE':'0'}):
+            self.assertIsNone(trusted_caller())
+        self.assertIsNone(trusted_caller('claude-code'))
+        self.assertEqual([('claude-code', 'host_registry')],
+                         [(row['caller_profile'], row['caller_provenance']) for row in self.rows()])
+        for bad in ({'claude-code':{}}, {'claude-code':{'CLAUDE CODE':'1'}}, {'claude-code':{'CLAUDECODE':1}},
+                    {'unknown':{'CLAUDECODE':'1'}}, ['claude-code']):
+            path.write_text(json.dumps({**config, 'environments':bad}))
+            with self.assertRaises(ValueError): trusted_caller()
 
     def test_bad_caller_configuration_warns_without_preventing_domain_work(self):
         path = self.config/'callers.yaml'; path.write_text('null\n'); path.chmod(0o600)
@@ -82,7 +111,8 @@ class DiagnosticIntegrationTests(unittest.TestCase):
 
     def test_request_route_and_response_failures_keep_observed_stage(self):
         self.call('init', {'context_id':'scope'})
-        with self.assertRaises(ValueError): self.call('capture', {'body':'secret request text'})
+        capture = parser().parse_args(['capture','--root',str(self.root/'realm'),'--scope','scope','--wait'])
+        with self.assertRaises(ValueError): dispatch(capture, {'body':'secret request text','title':''})  # rejected before the store
         args = parser().parse_args(['context','--profile','absent','--realm','absent'])
         with self.assertRaises(ValueError): dispatch(args, {})
         app = service(self.root/'realm')

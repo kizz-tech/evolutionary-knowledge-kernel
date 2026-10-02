@@ -2,7 +2,8 @@
 
 For result retention, explicit challenges, current file evidence and owner recovery, see [daily reliability](daily-reliability.md).
 
-Start with `ekk enter --cwd <project> --task <intent> --compact`.
+Start with `ekk enter --cwd <project> --task <intent> --brief`; the
+[agent contract](agent-contract.md) is the short version of this page.
 [Quick entry](quickstart.md) describes the personal home, separate projection, and
 exact continuation. [Methods](methods.md) describes verification, application,
 transfer, and retirement of an outdated version. Neither entry nor reading creates
@@ -32,7 +33,7 @@ selection does not reuse the workspace's contexts, and context fields inside a
 JSON request do not replace those routing flags. Reuse the successful bound
 `--cwd` where possible. These commands do not expand permissions.
 
-# Everyday work with EKK 0.7
+# Everyday work
 
 Describe the task to the agent: "check the grounds for this decision," "retain a
 significant result," or "help change the product in light of accepted constraints."
@@ -51,20 +52,31 @@ keys with the actual values for the current authorized task; these are not
 ready-made user data.
 
 ```sh
-ekk context --profile personal --realm personal --scope CONTEXT_ID --task 'Check the grounds for a decision' --compact
-ekk capture --profile personal --realm personal --scope CONTEXT_ID --file /path/to/source.md --title 'Significant observation' --idempotency-key CAPTURE_REQUEST_ID
+ekk enter --cwd /path/to/project --task 'Check the grounds for a decision' --brief
+ekk retain --cwd /path/to/project --title 'What was found' --result-file /path/to/report.md
+ekk capture --cwd /path/to/project --file /path/to/source.md --title 'Significant source'
 ```
 
-For `enter` and `context`, `--compact` only shortens historical metadata and the
-list of omitted IDs in the display. Complete selected bodies and the
-`blocked`/`incomplete` indicators, authority, and digest are preserved. This is a
-separate display schema; repeat the command without the flag for the full response.
-JSON/stdin requests support only the full response. See [agent entry](agent-entry.md)
-for details.
+Without a bound project, select the owner explicitly with `--profile PROFILE
+--realm ALIAS --scope CONTEXT_ID` on each command.
 
-`capture` preserves the exact source bytes and applies the prepared change.
-Repeating the same operation uses the same key; different content requires a
-different request. A missing response after a failure does not mean that no write
+For `enter` and `context`, `--compact` and `--brief` print the same short agent
+view (`ekk.context-brief/0.3`): required reading in full, then each other selected
+record as a title, date, its own opening paragraph, the reason it was selected and
+an exact reference. The `blocked`/`incomplete` indicators, the reasons for
+incompleteness and the snapshot are kept. The view selects with a 64 kB record
+budget unless `--budget` is given, so it can list more records than the full
+projection, whose default is 16 kB; repeat the command without the flag, with the
+same `--budget`, for the full projection of the same selection. Other commands
+accept these flags and ignore them. Read a
+listed record with `ekk fetch --id ID` and its source text with
+`ekk read-source --id ID`, using the same route options. See
+[agent entry](agent-entry.md) for details.
+
+`capture` preserves the exact source bytes. Like `retain`, it queues the request
+and returns a key at once; publication runs in the background and `--wait` makes
+it synchronous. Repeating the same operation uses the same key; different content
+requires a different request. A missing response after a failure does not mean that no write
 was completed.
 
 To change a record, the agent prepares a JSON request file for `propose`. `base`

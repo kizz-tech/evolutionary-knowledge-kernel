@@ -1,19 +1,19 @@
 {
-  "edition": "0.8.0",
+  "edition": "0.9.0",
   "files": [
     {
       "method": "unicode_escape_identical_ast",
       "original_path": "src/ekk/application/discovery.py",
-      "original_sha256": "f3397766dab068b2a9a89c67231122010ac352a3f9466ab6685dbf96c5c1794a",
+      "original_sha256": "fa3ef4824af651d6c3e2a0423e1b667120e3dfc073950d9232cdb262eb9c2a88",
       "path": "src/ekk/application/discovery.py",
-      "sha256": "42e027040096362c28ec3b93e72e01c4888938d550f8fbd1e65e951d0ffa8f8f"
+      "sha256": "ba30ed11bdf71995d54df4553ad01dd15f5fabd9babd0508de2054acc556bf32"
     },
     {
       "method": "unicode_escape_identical_ast",
       "original_path": "tests/test_continuous_work.py",
-      "original_sha256": "bf899d974e1ae3be47758b2749648470836b8afbbd64f3d9f6f03633e2aedd0b",
+      "original_sha256": "be6119dfae1ab05b61886f669ce17f037de5a1756004f32451681cac414b2c75",
       "path": "tests/test_continuous_work.py",
-      "sha256": "bf72f9a8883472f2ebd743b0198aeb15935ea0c71b8b4c5c7c90283841f390e9"
+      "sha256": "e32517ecfec6bad9e3a751b61af659dd168dddd1e008a612e81e10f8be2d264a"
     },
     {
       "method": "unicode_escape_identical_ast",
@@ -723,6 +723,13 @@
       "sha256": "71bb2e9c6cb42f83a3cd76fe1c93f7082df9af2c64180598fa64655ea2e20257"
     },
     {
+      "method": "explicit_translation",
+      "original_path": "src/ekk/observation.py",
+      "original_sha256": "6cebee345cd8554cd6fe30f18c842215661d3341f92b9eb252546ea69dc1253c",
+      "path": "src/ekk/observation.py",
+      "sha256": "4abc8b29b738837c41f878d54e1bcb74eb8c25d9aa521aac377ea9526bf5863a"
+    },
+    {
       "method": "reused_verified_english",
       "original_path": "tests/test_architecture_application.py",
       "original_sha256": "99c1dc73444f4bd3311d6d95dac9634dbeaba99e440cf0b361139f950e4c0b0c",
@@ -730,18 +737,18 @@
       "sha256": "661cfcd63a74d8c44038382655bfcf02e9634081878ffb249bcb07c80430a366"
     },
     {
-      "method": "reused_verified_english",
+      "method": "unicode_escape_identical_ast",
       "original_path": "tests/test_architecture_store.py",
-      "original_sha256": "aeb6b8807ab0f7c25b3114db630178b58e2c8487f10bff8ca52b78d0fe8c5eb6",
+      "original_sha256": "96c8d3de5f5a0d07b02eba40962216acf7933ab76c8c666f045db6c6fa240eae",
       "path": "tests/test_architecture_store.py",
-      "sha256": "568545a022a6a6bc85430aa4ef1fbab45525bed89b337a647cf5b3f3cde524ac"
+      "sha256": "6459fd9f9d3055688946fc992d13b9f7df40a465dcde5edb9eefa2a837b97282"
     },
     {
-      "method": "reused_verified_english",
+      "method": "unicode_escape_identical_ast",
       "original_path": "tests/test_context_continuity.py",
-      "original_sha256": "ce61b0babc25692bcd561657d4201325cea13b15eeb6150e101cb2d102fc699d",
+      "original_sha256": "571a7a161aeecbdec434a408c17179d9885bef269a1a8a739be72f4e7f2ac5f6",
       "path": "tests/test_context_continuity.py",
-      "sha256": "44690666481a227782882098adbe3c8299d32f73f78b1aa32c44946d7b1fdf74"
+      "sha256": "7b7c62d9327c19bdf14c80196a31c890895764a2d3a39be1052585a286394f5d"
     },
     {
       "method": "reused_verified_english",
@@ -749,6 +756,27 @@
       "original_sha256": "65f230924b3dd8e71799a08137cbea3f2decc0469d24f7869a5e33b5cbe8c452",
       "path": "tests/test_record_queries.py",
       "sha256": "6bd39d1be44d953a95430f5f2521d67d68369759d4d92ff2faa62875e1944135"
+    },
+    {
+      "method": "unicode_escape_identical_ast",
+      "original_path": "tests/test_observation.py",
+      "original_sha256": "1fca1250a54c09d72600ebe2445e3c19ecc9853332f14931a8f6d8cba0700540",
+      "path": "tests/test_observation.py",
+      "sha256": "b95073befd8326a9008dc372b3d867970be611bd0744d978791d1d02e217193a"
+    },
+    {
+      "method": "unicode_escape_identical_ast",
+      "original_path": "tests/test_experience.py",
+      "original_sha256": "64462d09f8e21e06f92dd5c1d449c37277e6eda8b5a7aaa2a081c9a686ec9410",
+      "path": "tests/test_experience.py",
+      "sha256": "7e7153eb17cd43d208cb025ebfcfbfd5f0d6ff872124e74fe897c4063502c241"
+    },
+    {
+      "method": "unicode_escape_identical_ast",
+      "original_path": "research/studies/field-use/test_field_use.py",
+      "original_sha256": "ac26efb8631dbedc668b2a04798cd41a81ee1723324a861cbed05a1ad8a6ff6f",
+      "path": "research/studies/field-use/test_field_use.py",
+      "sha256": "983e27b73f10c611846fd3acf473a326503dd8d7ef0e223a378bb11ab5ccd1b2"
     }
   ],
   "language": "en",

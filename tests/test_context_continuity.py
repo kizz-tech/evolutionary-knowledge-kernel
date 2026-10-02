@@ -11,9 +11,12 @@ import unittest
 from unittest.mock import patch
 
 import ekk
+from ekk.adapters.context_display import brief_context
 from ekk.adapters.git_store import GitStore
 from ekk.adapters.markdown import MarkdownCodec
 from ekk.application import RealmService
+from ekk.application import discovery
+from ekk.application.discovery import RecordRanker
 from ekk.application.workspace import WorkspaceService, work_view
 from ekk.model import digest
 
@@ -23,15 +26,37 @@ NOW = '2026-09-08T12:00:00Z'
 
 
 class ContextContinuityTests(unittest.TestCase):
-    def test_source_scanning_has_a_shared_deterministic_byte_limit(self):
+    def test_source_ranking_reads_a_bounded_lead_of_each_asset(self):
         self.source(b'x'*300+b' needle',title='Source descriptor')
-        with patch('ekk.application.service.CONTEXT_SOURCE_SCAN_BYTES',128):
+        with patch('ekk.application.discovery.ENTRY_SOURCE_LEAD_CHARS',128):
             result=self.app.context(['scope'],task='needle')
         coverage=result['manifest']['source_search']
-        self.assertEqual(128,coverage['scanned_bytes'])
-        self.assertEqual(128,coverage['scan_budget_bytes'])
-        self.assertTrue(result['manifest']['incomplete'])
+        self.assertEqual(('bm25',128,1),(coverage['method'],coverage['source_lead_chars'],coverage['partial_assets']))
         self.assertEqual([],result['records'])
+        # Lead-limited discovery is declared coverage, not an incomplete projection.
+        self.assertFalse(result['manifest']['incomplete'])
+        found=self.app.context(['scope'],task='needle')
+        self.assertEqual(['Source descriptor'],[row['metadata']['title'] for row in found['records']])
+        self.assertEqual(['needle'],found['records'][0]['discovery']['matched_terms'])
+        self.assertIn('needle',found['records'][0]['discovery']['excerpt'])
+
+    def test_entry_ranking_prefers_a_focused_record_over_long_generic_text(self):
+        focused=self.add('payout-rule','Partner payout minimum is 3000 RUB for every partner.',title='Partner payout minimum')
+        self.add('generic',' '.join(['backend platform contract help across ui and the']*400)+' partner',title='Platform notes')
+        self.add('unrelated','Avatar rendering queue.',title='Avatar queue')
+        context=self.app.context(['scope'],task='Raise partner payout minimum across backend contract and platform UI')
+        self.assertEqual(focused['id'],context['records'][0]['id'])
+        self.assertNotIn('unrelated',[row['id'] for row in context['records']])
+        row=self.row(context,focused)
+        self.assertEqual('ranked',row['selection'])
+        self.assertTrue({'partner','payout','minimum'}<={*row['discovery']['matched_terms']})
+        self.assertIn('3000',row['discovery']['excerpt'])
+
+    def test_entry_ranking_ignores_stop_words_and_matches_inflected_forms(self):
+        self.add('stop-words',' '.join(['\u0438 \u0432 \u043d\u0430 the and of to']*50),title='Common words only')
+        target=self.add('tariff','\u0421\u043c\u0435\u043d\u0430 \u0442\u0430\u0440\u0438\u0444\u0430 \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u0442 \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0439 \u043f\u043b\u0430\u043d.',title='\u0421\u043c\u0435\u043d\u0430 \u0442\u0430\u0440\u0438\u0444\u0430')
+        context=self.app.context(['scope'],task='\u0418\u0441\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0441\u043c\u0435\u043d\u0443 \u0442\u0430\u0440\u0438\u0444\u043e\u0432 \u0438 the plan')
+        self.assertEqual([target['id']],[row['id'] for row in context['records']])
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -99,6 +124,11 @@ class ContextContinuityTests(unittest.TestCase):
         return reference
 
     @staticmethod
+    def exact(reference):
+        return {'id': reference['id'], 'title': reference['id'], 'revision': reference['revision'],
+                'digest': reference['digest']}
+
+    @staticmethod
     def row(context, reference):
         return next(row for row in context['records'] if row['id'] == reference['id']
                     and row['metadata']['revision'] == reference['revision']
@@ -157,8 +187,11 @@ class ContextContinuityTests(unittest.TestCase):
                              basis=[original], supersedes=[wrong])
         context = self.app.context(['scope'], task='corrected-reading')
         self.assertFalse(context['blocked'])
-        self.assertEqual(self.row(context, wrong)['body'], 'Every operation fails.')
+        # Current first: the replaced reading is named by exact reference, not emitted.
+        self.assertNotIn(wrong['id'], [row['id'] for row in context['records']])
         self.assertEqual(self.row(context, corrected)['body'], 'Only one timeout is documented.')
+        self.assertEqual(self.row(context, corrected)['replaces'], [self.exact(wrong)])
+        self.assertFalse(context['manifest']['incomplete'])
         summary = next(item for item in context['insights']['statements']
                        if item['reference'] == corrected)
         self.assertEqual(summary['supersedes'], [wrong])
@@ -169,6 +202,252 @@ class ContextContinuityTests(unittest.TestCase):
         self.assertEqual(base64.b64decode(source_read['base64']), original_bytes)
         asset_path = source_read['asset']['path']
         self.assertEqual(self.store.snapshot()['files'][asset_path], original_bytes)
+
+    def test_conflicting_readings_without_supersession_are_both_emitted(self):
+        original = self.source()
+        first = self.add('first-reading', 'Every operation fails.', kind='claim', basis=[original])
+        second = self.add('second-reading', 'Only one operation fails.', kind='claim', basis=[original],
+                          conflicts=[first])
+        context = self.app.context(['scope'], task='operation fails reading')
+        for reference in (first, second):
+            self.assertFalse({'replaces', 'superseded_by'} & set(self.row(context, reference)))
+        self.assertEqual(context['insights']['adjudication'], 'not_inferred')
+
+    def test_entry_shows_the_head_of_a_supersession_chain(self):
+        first = self.add('limit-one', 'Zebra quota is ten.')
+        second = self.add('limit-two', 'Quota is twenty.', supersedes=[first])
+        third = self.add('limit-three', 'The threshold is thirty.', supersedes=[second])
+        context = self.app.context(['scope'], task='zebra')
+        self.assertEqual([third['id']], [row['id'] for row in context['records']])
+        row = context['records'][0]
+        self.assertEqual(('ranked', [self.exact(second)]), (row['selection'], row['replaces']))
+        self.assertNotIn('superseded_by', row)
+        # The head takes the best score of its chain; it has no matching word of its own.
+        self.assertGreater(row['discovery']['score'], 0)
+        self.assertEqual([], row['discovery']['matched_terms'])
+        self.assertEqual(([], False), (context['warnings'], context['manifest']['incomplete']))
+        self.assertIn('current_first', context['manifest']['ranking'])
+        everything = self.app.context(['scope'])
+        self.assertEqual([third['id'], 'scope'], sorted(row['id'] for row in everything['records']))
+        brief = brief_context(context)
+        self.assertEqual('current version of matching material', brief['items'][0]['why'])
+        self.assertEqual([{'id': second['id'], 'title': second['id']}], brief['items'][0]['replaces'])
+
+    def test_a_fork_gives_every_head_and_self_revision_replaces_nothing(self):
+        origin = self.add('fork-origin', 'Zebra quota is ten.')
+        self.add('fork-left', 'Left reading.', supersedes=[origin])
+        self.add('fork-right', 'Right reading.', supersedes=[origin])
+        revised = self.add('revised', 'Zebra first.')
+        self.add('revised', 'Zebra second.', revision=2, supersedes=[revised])
+        context = self.app.context(['scope'], task='zebra')
+        rows = {row['id']: row for row in context['records']}
+        self.assertEqual({'fork-left', 'fork-right', 'revised'}, set(rows))
+        self.assertEqual(3, len(context['records']))
+        self.assertEqual([self.exact(origin)], rows['fork-left']['replaces'])
+        self.assertEqual([self.exact(origin)], rows['fork-right']['replaces'])
+        self.assertEqual(2, rows['revised']['metadata']['revision'])
+        self.assertFalse({'replaces', 'superseded_by'} & set(rows['revised']))
+
+    def test_supersession_pinned_to_an_earlier_revision_replaces_nothing(self):
+        old = self.add('moving', 'Zebra one.')
+        self.add('pinned-successor', 'Zebra successor.', supersedes=[old])
+        self.add('moving', 'Zebra two.', revision=2)
+        context = self.app.context(['scope'], task='zebra')
+        rows = {row['id']: row for row in context['records']}
+        self.assertEqual({'moving', 'pinned-successor'}, set(rows))
+        self.assertEqual('Zebra two.', rows['moving']['body'])
+        self.assertNotIn('superseded_by', rows['moving'])
+        self.assertNotIn('replaces', rows['pinned-successor'])
+
+    def test_successor_outside_the_projection_is_a_warning_not_a_disclosure(self):
+        self.add('other-scope', kind='context', scopes=['other-scope'], context={'purpose': 'Other synthetic context'})
+        shown = self.add('shown', 'Zebra quota is ten.')
+        hidden = self.add('hidden-successor', 'Confidential replacement.', scopes=['other-scope'], supersedes=[shown])
+        context = self.app.context(['scope'], task='zebra')
+        self.assertEqual([shown['id']], [row['id'] for row in context['records']])
+        self.assertEqual(['selected material has a successor outside the requested or authorized projection'],
+                         context['warnings'])
+        self.assertEqual(([], False), (context['unknowns'], context['blocked']))
+        self.assertNotIn('superseded_by', context['records'][0])
+        rendered = json.dumps(context)
+        for value in ('hidden-successor', 'Confidential replacement.', hidden['digest'].removeprefix('sha256:')):
+            self.assertNotIn(value, rendered)
+        both = self.app.context(['scope', 'other-scope'], task='zebra')
+        self.assertEqual([hidden['id']], [row['id'] for row in both['records']])
+        self.assertEqual([], both['warnings'])
+
+    def test_focus_on_a_replaced_record_brings_its_head(self):
+        old = self.add('old-choice', 'Use the first plan.')
+        new = self.add('new-choice', 'Use the second plan.', supersedes=[old])
+        context = self.app.context(['scope'], task='unmatchedintention', focus=[old])
+        self.assertEqual(('required', [self.exact(new)]),
+                         (self.row(context, old)['selection'], self.row(context, old)['superseded_by']))
+        self.assertEqual(('successor', [self.exact(old)]),
+                         (self.row(context, new)['selection'], self.row(context, new)['replaces']))
+        self.assertEqual([], context['warnings'])
+        items = brief_context(context)['items']
+        self.assertEqual([('replaces selected material', None),
+                          ('pinned for this workspace or a ground of a governing record',
+                           [{'id': new['id'], 'title': new['id']}])],
+                         [(item['why'], item.get('superseded_by')) for item in items])
+        tight = self.app.context(['scope'], task='unmatchedintention', focus=[old],
+                                 budget=len(self.store.snapshot()['files']['records/old-choice.md']))
+        self.assertEqual([old['id']], [row['id'] for row in tight['records']])
+        self.assertEqual(['selected material is superseded; its successor did not fit the byte budget'], tight['warnings'])
+        self.assertEqual(([], False), (tight['unknowns'], tight['blocked']))
+
+    def test_archive_is_a_prior_on_the_plain_score_not_a_tier(self):
+        self.add('imported', 'Zebra crossing rule.', migration={'origin': {'path': 'legacy/zebra.md'}})
+        self.add('derived-history', 'Zebra crossing history.', adoption='not_adopted')
+        self.add('current-strong', 'Zebra crossing decision.')
+        self.add('current-weak', 'Zebra aside.')
+        scores = {'imported': 10.0, 'derived-history': 4.0, 'current-strong': 3.0, 'current-weak': 2.0}
+        with patch('ekk.application.discovery.RecordRanker.scores', return_value=dict(scores)):
+            context = self.app.context(['scope'], task='zebra crossing')
+        # The floor is a quarter of the best plain score; archive scores are halved for ordering only,
+        # so a dominant imported match still leads and a weaker one follows current material.
+        self.assertEqual(['imported', 'current-strong', 'derived-history'], [row['id'] for row in context['records']])
+        self.assertEqual(['archive', None, 'archive'], [row.get('tier') for row in context['records']])
+        self.assertEqual([(5.0, 10.0), (3.0, None), (2.0, 4.0)],
+                         [(row['discovery']['score'], row['discovery'].get('plain_score')) for row in context['records']])
+        ranking = context['manifest']['ranking']
+        self.assertEqual((0.25, 'best plain score', {'owner_preference': 1.5, 'archive': 0.5}, 'orders optional reading only'),
+                         (ranking['relative_score_floor'], ranking['floor_basis'], ranking['priors'], ranking['effect']))
+        self.assertNotIn('boosts', ranking)
+        self.assertEqual([{'id': key, 'title': key, 'kind': 'note', 'revision': 1} for key in ('imported', 'derived-history', 'current-strong')],
+                         [{k: v for k, v in row.items() if k != 'digest'} for row in ranking['plain_order']])
+        self.assertTrue(all(row['digest'].startswith('sha256:') for row in ranking['plain_order']))  # exact, for later advice
+        self.assertEqual(['archive', None, 'archive'], [item.get('tier') for item in brief_context(context)['items']])
+        bare = self.app.context(['scope'])
+        self.assertEqual([], bare['manifest']['ranking']['plain_order'])
+        # Without a task every relevance is zero: current material still precedes archive.
+        self.assertEqual([None, None, 'archive', 'archive'], [row.get('tier') for row in bare['records'] if row['id'] != 'scope'])
+
+    def test_owner_preference_prior_orders_entry_but_not_the_floor_or_plain_order(self):
+        self.add('owner-rule', 'Zebra habit.', preference={'schema': 'ekk.preference/0.1', 'area': 'style', 'stated_by': 'owner'})
+        self.add('agent-guess', 'Zebra guess.', preference={'schema': 'ekk.preference/0.1', 'area': 'style', 'stated_by': 'agent'})
+        self.add('plain-note', 'Zebra note.')
+        self.add('faint', 'Zebra aside.', preference={'schema': 'ekk.preference/0.1', 'area': 'style', 'stated_by': 'owner'})
+        self.add('old-view', 'Zebra old.')
+        self.add('new-view', 'Current.', supersedes=[{'id': 'old-view'}])
+        scores = {'owner-rule': 4.0, 'agent-guess': 4.5, 'plain-note': 5.0, 'faint': 1.2, 'old-view': 8.0}
+        with patch('ekk.application.discovery.RecordRanker.scores', return_value=dict(scores)):
+            context = self.app.context(['scope'], task='zebra')
+        # 1.2 * 1.5 would pass a floor of 2.0, but the floor reads the plain score. An agent-reported
+        # preference gets no prior. The head of a chain takes the plain score of the record it replaces.
+        self.assertEqual([('new-view', 8.0), ('owner-rule', 6.0), ('plain-note', 5.0), ('agent-guess', 4.5)],
+                         [(row['id'], row['discovery']['score']) for row in context['records']])
+        self.assertEqual([0.0, 4.0, None, None], [row['discovery'].get('plain_score') for row in context['records']])
+        self.assertEqual([('old-view', 'note'), ('plain-note', 'note'), ('agent-guess', 'preference'), ('owner-rule', 'preference')],
+                         [(item['id'], item['kind']) for item in context['manifest']['ranking']['plain_order']])
+
+    def test_a_governing_record_is_selected_before_optional_reading_or_named_as_left_out(self):
+        rule = self.add('accepted-rule', 'Ledger entries stay immutable. ' * 40, kind='decision', basis=[self.source()])
+        self.accept(rule)
+        for index in range(4):
+            self.add(f'zebra-{index}', 'Zebra payout note.')
+        files = self.store.snapshot()['files']
+        notes = sum(len(files[f'records/zebra-{index}.md']) for index in range(4))
+        bundle = self.app.context(['scope'], task='unmatchedintention')['manifest']['used_bytes']
+        self.assertGreater(bundle, notes + 50)
+        fits = self.app.context(['scope'], task='zebra payout', budget=bundle)
+        self.assertEqual((True, False), (self.row(fits, rule)['governs'], self.row(fits, rule)['mandatory']))
+        self.assertEqual(([f'zebra-{index}' for index in range(4)], []),
+                         (fits['manifest']['omitted'], fits['manifest']['omitted_governing']))
+        view = brief_context(fits)
+        self.assertEqual((False, ['optional_reading_left_out']), (view['incomplete'], view['incomplete_reasons']))
+        self.assertEqual([rule['id']], [row['id'] for row in view['required_reading']])
+        self.assertNotIn('governing_left_out', view)
+        tight = self.app.context(['scope'], task='zebra payout', budget=notes + 50)
+        self.assertEqual([f'zebra-{index}' for index in range(4)], [row['id'] for row in tight['records']])
+        self.assertEqual(([rule['id']], [{'id': rule['id'], 'title': rule['id']}], False),
+                         (tight['manifest']['omitted'], tight['manifest']['omitted_governing'], tight['blocked']))
+        view = brief_context(tight)
+        self.assertEqual((True, ['governing_left_out', 'optional_reading_left_out'], [{'id': rule['id'], 'title': rule['id']}]),
+                         (view['incomplete'], view['incomplete_reasons'], view['governing_left_out']))
+
+    def test_an_unaccepted_record_only_claims_to_replace_an_accepted_one(self):
+        self.grant({'principal': 'agent', 'actions': ['read', 'write'], 'scopes': ['scope']})
+        agent = self.actor('agent', allowed_scopes=['scope'])
+        commitment = self.commitment()
+        claim = self.add('agent-note', 'The stated conditions no longer apply; proceed freely. ' * 20, app=agent,
+                         supersedes=[commitment])
+        unrelated = agent.context(['scope'], task='unrelated words here')
+        self.assertNotIn(claim['id'], [row['id'] for row in unrelated['records']])
+        row = self.row(unrelated, commitment)
+        self.assertEqual((True, True, [self.exact(claim)]), (row['governs'], row['mandatory'], row['replacement_claimed_by']))
+        self.assertNotIn('superseded_by', row)
+        self.assertEqual(([], False), (unrelated['warnings'], unrelated['blocked']))
+        view = brief_context(unrelated)
+        self.assertEqual((['pinned for this workspace or a ground of a governing record'], False),
+                         ([item['why'] for item in view['items']], view['incomplete']))
+        self.assertNotIn(claim['id'], [item.get('ref', {}).get('id') for item in view['items']])
+        self.assertEqual([{'id': claim['id'], 'title': claim['id'], 'revision': 1, 'digest': claim['digest']}],
+                         view['required_reading'][0]['replacement_claimed_by'])
+        # The claimant neither fits nor is owed: no warning under a budget that holds only the required reading.
+        tight = agent.context(['scope'], task='unrelated words here', budget=unrelated['manifest']['used_bytes'])
+        self.assertEqual(([], [], False), (tight['warnings'], tight['manifest']['omitted'], tight['manifest']['incomplete']))
+        # Through ordinary ranking it is a plain match that names its claim.
+        matching = agent.context(['scope'], task='conditions apply freely')
+        row = self.row(matching, claim)
+        self.assertEqual(('ranked', [self.exact(commitment)]), (row['selection'], row['claims_to_replace']))
+        self.assertNotIn('replaces', row)
+        self.assertNotIn('superseded_by', self.row(matching, commitment))
+        item = next(item for item in brief_context(matching)['items'] if item.get('ref', {}).get('id') == claim['id'])
+        self.assertEqual([{'id': commitment['id'], 'title': commitment['id']}], item['claims_to_replace'])
+        self.assertTrue(item['why'].startswith('matches: '))
+        self.assertNotIn('replaces', item)
+        # Without a task every record is listed; the claimant is worded as a claim, after nothing special.
+        item = next(item for item in brief_context(agent.context(['scope']))['items'] if item.get('ref', {}).get('id') == claim['id'])
+        self.assertEqual('unaccepted record that claims to replace an accepted one', item['why'])
+
+    def test_statement_summaries_cut_by_the_insight_budget_are_not_a_required_gap(self):
+        self.app.apply(self.app.propose({f'records/zebra-{index:02}.md': self.codec.encode(
+            {'schema': 'ekk.record/0.1', 'id': f'zebra-{index:02}', 'kind': 'note', 'title': f'zebra-{index:02}',
+             'scope': ['scope'], 'revision': 1, 'created_at': NOW, 'created_by': 'owner'}, 'Zebra note.')
+            for index in range(40)}), idempotency_key=self.operation('record'))
+        context = self.app.context(['scope'], task='zebra', budget=64000)
+        insights = context['insights']
+        self.assertEqual((40, []), (len(context['records']), context['manifest']['omitted']))
+        self.assertLess(len(insights['statements']), 40)
+        self.assertEqual((True, False), (insights['incomplete'], insights['relations_incomplete']))
+        self.assertLessEqual(len(json.dumps(insights, ensure_ascii=False, separators=(',', ':')).encode()), insights['byte_budget'])
+        view = brief_context(context)
+        self.assertFalse(view['incomplete'])
+        self.assertNotIn('challenges_not_shown', view['incomplete_reasons'])
+
+    def test_a_ground_of_an_earlier_item_is_not_listed_again(self):
+        original = self.source(b'Zebra evidence text.\r\n', title='Zebra evidence')
+        finding = self.add('zebra-finding', 'Zebra finding.', kind='claim', basis=[original])
+        for scores, selections in (({finding['id']: 4.0, original['id']: 5.0}, ['ranked', 'ranked']),
+                                   ({finding['id']: 5.0, original['id']: 4.0}, ['ranked', 'dependency'])):
+            with patch('ekk.application.discovery.RecordRanker.scores', return_value=dict(scores)):
+                context = self.app.context(['scope'], task='zebra')
+            self.assertEqual(2, len(context['records']))
+            self.assertEqual(selections, [self.row(context, ref)['selection'] for ref in (finding, original)])
+            self.assertEqual(1, self.row(context, finding)['grounds'])
+            self.assertEqual([{'id': original['id'], 'title': 'Zebra evidence', 'revision': original['revision'],
+                               'digest': original['digest']}], self.row(context, finding)['ground_refs'])
+            self.assertNotIn('grounds', self.row(context, original))
+            self.assertNotIn('ground_refs', self.row(context, original))
+        # The agent view counts the ground on the finding and names it by reference instead of listing it.
+        self.assertEqual([(finding['id'], 1, [{'id': original['id'], 'title': 'Zebra evidence'}])],
+                         [(item['ref']['id'], item['grounds'], item['ground_refs']) for item in brief_context(context)['items']])
+
+    def test_task_term_weights_reach_entry_ranking(self):
+        class Terms:
+            def weight(self, stem):
+                return 0.05 if stem == 'fix' else 1.0
+        self.add('fix-log', 'Fix fix fix.')
+        self.add('other-log', 'Avatar queue.')
+        self.add('payout-rule', 'Payout minimum.')
+        self.add('payout-note', 'Payout payout aside.')
+        plain = self.app.context(['scope'], task='fix payout')
+        self.assertFalse(plain['manifest']['source_search']['query_weights_applied'])
+        self.assertEqual('fix-log', plain['records'][0]['id'])
+        weighted = self.actor('owner', task_terms=Terms()).context(['scope'], task='fix payout')
+        self.assertTrue(weighted['manifest']['source_search']['query_weights_applied'])
+        self.assertNotIn('fix-log', [row['id'] for row in weighted['records'][:2]])
 
     def test_unrelated_words_do_not_hide_explicit_dissent_or_revoke_commitment(self):
         commitment = self.commitment()
@@ -268,6 +547,8 @@ class ContextContinuityTests(unittest.TestCase):
         self.assertTrue(self.row(context, commitment)['governs'])
         self.assertTrue(context['manifest']['incomplete'])
         self.assertTrue(context['insights']['incomplete'])
+        self.assertTrue(context['insights']['relations_incomplete'])
+        self.assertEqual(['challenges_not_shown', 'optional_reading_left_out'], brief_context(context)['incomplete_reasons'])
         self.assertEqual(context['insights']['challenges'], [])
         self.assertNotIn(dissent['id'], [row['id'] for row in context['records']])
 
@@ -319,7 +600,8 @@ class ContextContinuityTests(unittest.TestCase):
         context = self.app.context(['scope'], task='\u041d\u0415\u041f\u041e\u0412\u0422\u041e\u0420\u0418\u041c\u0410\u042f\u041d\u0415\u041f\u0420\u0415\u0420\u042b\u0412\u041d\u041e\u0421\u0422\u042c')
         self.assertFalse(context['blocked'])
         self.assertEqual(self.row(context, original)['metadata']['kind'], 'source')
-        self.assertEqual(context['manifest']['source_search']['omitted_or_partial_assets'], 0)
+        coverage = context['manifest']['source_search']
+        self.assertEqual((coverage['partial_assets'], coverage['unsearchable_assets']), (0, 0))
         self.assertEqual(self.store.snapshot()['revision'], before)
         self.assertEqual(base64.b64decode(self.app.read_source(['scope'], original)['base64']), raw)
 
@@ -371,6 +653,59 @@ class ContextContinuityTests(unittest.TestCase):
                          context['work_view']['visible_results'])
         self.assertEqual(from_process['entry']['mutations'], 0)
         self.assertEqual(self.store.snapshot()['revision'], before)
+
+
+def ranked_row(title, body, **metadata):
+    return {'metadata': {'title': title, **metadata}, 'body': body}
+
+
+class RecordRankerTests(unittest.TestCase):
+    def test_a_source_lead_equal_to_the_record_body_is_indexed_once(self):
+        text = 'Payout minimum  rule.\nPartners receive 3000.'
+        asset = {'source': {'assets': [{'path': 'assets/a.md'}]}}
+        rows = {'imported': ranked_row('Imported', text, **asset), 'other': ranked_row('Other', 'Avatar queue.')}
+        twice = RecordRanker(rows, {'assets/a.md': b'Different payout text.'})
+        once = RecordRanker(rows, {'assets/a.md': b'Payout minimum rule. Partners\r\n receive 3000.\n'})
+        plain = RecordRanker({**rows, 'imported': ranked_row('Imported', text)}, {})
+        self.assertEqual((0, 1), (twice.coverage['duplicate_leads'], once.coverage['duplicate_leads']))
+        self.assertEqual(0, once.coverage['scanned_chars'])
+        self.assertEqual(plain.scores('payout rule'), once.scores('payout rule'))
+        self.assertEqual('body', once.explain('imported', 'payout rule')['section'])
+
+    def test_query_weights_change_ranking_and_the_order_of_matched_terms(self):
+        rows = {'fixes': ranked_row('Log', 'Fix fix fix.'), 'payout': ranked_row('Rule', 'Payout minimum.'),
+                'both': ranked_row('Mixed', 'Fix the payout.'), 'payouts': ranked_row('More', 'Payout payout aside.'),
+                'noise': ranked_row('Noise', 'Avatar queue.')}
+        task = 'Fix payout'
+        plain = RecordRanker(rows, {})
+        weighted = RecordRanker(rows, {}, query_weight=lambda term: 0.05 if term == 'fix' else 1.0)
+        invalid = RecordRanker(rows, {}, query_weight=lambda term: 7)
+        before, after = plain.scores(task), weighted.scores(task)
+        self.assertGreater(before['fixes'], before['payout'])
+        self.assertGreater(after['payout'], after['fixes'])
+        self.assertEqual((False, True), (plain.coverage['query_weights_applied'], weighted.coverage['query_weights_applied']))
+        # 'fix' is the rarer word, so it leads until its weight says it frames the task.
+        self.assertEqual(['fix', 'payout'], plain.explain('both', task)['matched_terms'])
+        self.assertEqual(['payout', 'fix'], weighted.explain('both', task)['matched_terms'])
+        self.assertEqual(before, invalid.scores(task))
+        self.assertFalse(invalid.coverage['query_weights_applied'])
+
+    def test_explanation_names_at_most_six_terms(self):
+        words = 'alpha bravo charlie delta echo foxtrot golf hotel'
+        ranker = RecordRanker({'a': ranked_row('All', words), 'b': ranked_row('Other', 'alpha bravo')}, {})
+        matched = ranker.explain('a', words)['matched_terms']
+        self.assertEqual(6, len(matched))
+        self.assertFalse({'alpha', 'bravo'} & set(matched))
+
+    def test_scores_are_plain_and_priors_belong_to_the_entry(self):
+        rows = {'plain': ranked_row('Note', 'Use tabs.'),
+                'preferred': ranked_row('Note', 'Use tabs.', preference={'area': 'style', 'stated_by': 'owner'}),
+                'imported': ranked_row('Note', 'Use tabs.', migration={'origin': {'path': 'legacy/tabs.md'}})}
+        ranker = RecordRanker(rows, {})
+        scores = ranker.scores('tabs')
+        self.assertEqual((scores['plain'], scores['plain']), (scores['preferred'], scores['imported']))
+        self.assertNotIn('boosts', ranker.coverage)
+        self.assertEqual((1.5, 0.5), (RecordRanker.PREFERENCE_BOOST, discovery.ARCHIVE_PRIOR))
 
 
 if __name__ == '__main__':
