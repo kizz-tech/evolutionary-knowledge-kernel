@@ -7,7 +7,8 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from .command_line import service, _routes, _invalid_json_constant, error_code
+from ..application.errors import RequestError
+from .command_line import service, _routes, request_json, error_code, error_document
 from .local_profile import binding, data_home, trusted_principal
 from .operational_store import OperationalStore, private_directory
 from ..application.work import WorkService
@@ -183,9 +184,11 @@ def start_worker(args, store):
 def execute(group, args, request):
     operation=args.operation
     if group=='guide':
-        from ..application.practices import PRACTICES,practice
-        if operation=='list':result={'domains':list(PRACTICES),'required':False}
-        elif operation=='show':result=practice(args.domain,request)
+        from ..application.practices import PRACTICES,PHASES,practice
+        phase=getattr(args,'phase',None)
+        if phase is not None and operation!='show':raise ValueError('--phase applies to guide show only; method packages retain their existing identity')
+        if operation=='list':result={'domains':list(PRACTICES),'phases':list(PHASES),'required':False}
+        elif operation=='show':result=practice(args.domain,request,phase=phase)
         else:
             from .practical_methods import artifact,spec
             if args.domain not in PRACTICES:raise ValueError('Choose a known practice domain')
@@ -198,6 +201,8 @@ def execute(group, args, request):
         if group in {'work','improve'}:
             if group=='work' and operation=='find':request.setdefault('query',args.query)
             result=canonical_dispatch(app,scopes,group,operation,request)
+            from .command_line import routed_navigation
+            result=routed_navigation(result,args,scopes=scopes)
         else:
             if args.state_dir or (group=='queue' and operation in {'backup','restore'}):
                 if app.allowed_scopes is not None or realm['owner']!=app.principal:raise PermissionError('Operational administration requires an explicit full realm owner route')
@@ -263,19 +268,23 @@ def main(group, argv=None):
     parser.add_argument('--realm');parser.add_argument('--root',type=Path);parser.add_argument('--scope',action='append',default=[])
     parser.add_argument('--json',type=Path);parser.add_argument('--stdin',action='store_true')
     parser.add_argument('--key');parser.add_argument('--query',default='');parser.add_argument('--domain')
+    if group=='guide':
+        from ..application.practices import PHASES
+        parser.add_argument('--phase',choices=list(PHASES),help='show: optional decision phase, independent of domain; no required sequence')
     parser.add_argument('--no-start',action='store_true',help='Queue durably without starting a publisher')
     parser.add_argument('--background',action='store_true',help='drain: leave quietly when another publisher is already running')
     parser.add_argument('--state-dir',type=Path,help='Explicit isolated operational recovery directory; full realm owner only')
     args=parser.parse_args(argv)
     try:
-        if args.json and args.stdin:raise ValueError('Choose one JSON input')
-        request=json.loads(args.json.read_text() if args.json else sys.stdin.read(),parse_constant=_invalid_json_constant) if args.json or args.stdin else {}
-        if not isinstance(request,dict):raise ValueError('Object request required')
+        if args.json and args.stdin:raise RequestError('Choose one JSON input',option='--stdin')
+        option='--json' if args.json else '--stdin'
+        request=request_json(args.json.read_text() if args.json else sys.stdin.read(),option) if args.json or args.stdin else {}
+        if not isinstance(request,dict):raise RequestError('Object request required',option=option)
         if args.key:
-            if request.get('key',args.key)!=args.key:raise ValueError('Conflicting logical keys')
+            if request.get('key',args.key)!=args.key:raise RequestError('Conflicting logical keys',option='--key')
             request['key']=args.key
         from .operation_diagnostics import observed_call
         result=observed_call(group+'.'+args.operation,lambda:execute(group,args,request),key=request.get('key'))
         print(json.dumps(result,ensure_ascii=False,indent=2));return 0
     except (ValueError,OSError,KeyError,TypeError) as exc:
-        print(json.dumps({'error':error_code(exc),'message':str(exc)},ensure_ascii=False),file=sys.stderr);return 2
+        print(json.dumps(error_document(exc),ensure_ascii=False),file=sys.stderr);return 2

@@ -10,13 +10,14 @@ from ekk.application import RealmService
 from ekk.application.workspace import WorkspaceService, exact_reference
 from ekk.adapters.local_profile import LocalProfile
 from ekk.adapters.command_line import dispatch, parser
+from ekk.adapters.host_identity import SCRUB_VARIABLES
 
 def isolate(test):
     """CLI dispatch journals every call; keep it out of the owner's EKK state."""
     home=tempfile.TemporaryDirectory();test.addCleanup(home.cleanup)
     env=patch.dict(os.environ,{'EKK_DATA_HOME':home.name+'/data','EKK_CONFIG_HOME':home.name+'/config','EKK_CACHE_HOME':home.name+'/cache'})
     env.start();test.addCleanup(env.stop)
-    for marker in ('CODEX_HOME','CLAUDECODE'):os.environ.pop(marker,None)
+    for name in SCRUB_VARIABLES:os.environ.pop(name,None)
 
 class WorkspaceEntryTests(unittest.TestCase):
     def setUp(self):

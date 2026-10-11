@@ -8,14 +8,15 @@ import sys
 import tempfile
 import unittest
 from ekk.adapters.builtin_methods import spec, REFERENCE
+from ekk.adapters.host_identity import SCRUB_VARIABLES
 
 
 class MethodCliTests(unittest.TestCase):
     def test_json_lifecycle_and_quarantine(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            env = {k:v for k,v in os.environ.items() if not k.startswith('EKK_')}
-            env.update(EKK_CONFIG_HOME=str(root/'config'), EKK_DATA_HOME=str(root/'runtime'))
+            env = {k:v for k,v in os.environ.items() if not k.startswith('EKK_') and k not in SCRUB_VARIABLES}
+            env.update(EKK_CONFIG_HOME=str(root/'config'), EKK_DATA_HOME=str(root/'runtime'), EKK_CACHE_HOME=str(root/'cache'))
             def call(args, request=None, expected=0):
                 result = subprocess.run([sys.executable, '-m', 'ekk', *args],
                     input=json.dumps(request) if request is not None else None,

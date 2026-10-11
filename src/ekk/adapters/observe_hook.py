@@ -1,7 +1,8 @@
 """Host hook entry: `ekk observe --event NAME` with the hook's JSON on stdin.
 
 Runs on every prompt and turn end of a coding agent, so it imports only the
-standard library and the frozen observation rules, never blocks the host and
+standard library, the frozen observation rules and the standard-library core of
+host_identity (never its registry layer), never blocks the host and
 never fails it: any problem ends with exit status 0 and at most a line in the
 private error log. It writes one bounded, redacted event file to a private
 spool; the background observer turns events into records. Nothing is captured
@@ -16,15 +17,15 @@ import re
 import sys
 import time
 
-from .. import observation
+from .. import __version__, observation
 from ..homes import cache_home, config_home, data_home
+from . import host_identity
 
 EVENTS = {'SessionStart', 'UserPromptSubmit', 'Stop', 'SessionEnd'}
 MAX_REPOSITORIES = 16
 MAX_CARD_CHARS = 6000
 _OPT_OUT = re.compile(r'^\s*["\']?observe["\']?\s*:\s*["\']?(false|no|off)["\']?\s*,?\s*(#.*)?$', re.MULTILINE | re.IGNORECASE)
 _BINDING = re.compile(r'realm_id')
-_CODEX_HOME = re.compile(r'/\.codex(?:-([\w.-]+))?/')
 
 
 def observed_home():
@@ -140,21 +141,12 @@ def card_path(workspace):
 
 
 def host_of(payload):
-    """(host, profile) from what the host itself sent, falling back to its environment."""
-    transcript = payload.get('transcript_path') if isinstance(payload.get('transcript_path'), str) else ''
-    if '/.claude/' in transcript:
-        return 'claude-code', None
-    codex = _CODEX_HOME.search(transcript)
-    if codex:
-        return 'codex', codex.group(1)
-    if 'turn_id' in payload:
-        home = os.environ.get('CODEX_HOME')
-        return 'codex', (_CODEX_HOME.search(home + '/') or [None, None])[1] if home else None
-    if os.environ.get('CLAUDECODE') == '1':
-        return 'claude-code', None
-    if os.environ.get('CODEX_HOME'):
-        return 'codex', Path(os.environ['CODEX_HOME']).name.removeprefix('.codex-') or None
-    return 'unknown', None
+    """(host, profile) as earlier callers expect it, from host_identity's standard-library core.
+
+    The profile is a caller-registry key, which the hook never reads, so it is None
+    here; the observer resolves it from the spooled Codex home.
+    """
+    return host_identity.hook_identity(payload)[0], None
 
 
 def _private_directory(path):
@@ -182,9 +174,12 @@ def _start_observer():
     if log.exists() and log.stat().st_size > 256 * 1024:
         log.unlink()
     descriptor = os.open(log, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    # The drain publishes the observer's own outcomes, not the waking host's: it must not carry that host's identity.
+    environment = {name: value for name, value in os.environ.items() if name not in host_identity.SCRUB_VARIABLES}
     with os.fdopen(descriptor, 'ab') as stream:
         subprocess.Popen([sys.executable, '-I', '-B', '-m', 'ekk', 'observe', 'drain', '--background'],
-                         stdin=subprocess.DEVNULL, stdout=stream, stderr=stream, close_fds=True, start_new_session=True)
+                         stdin=subprocess.DEVNULL, stdout=stream, stderr=stream, close_fds=True, start_new_session=True,
+                         env=environment)
 
 
 def _note_error(reason):
@@ -236,10 +231,17 @@ def observe(event, raw):
         output = {'hookSpecificOutput': {'hookEventName': 'SessionStart', 'additionalContext': _session_card(workspace, routable)}}
     if not routable:
         return output, None
-    host, profile = host_of(payload)
-    document = {'schema': 'ekk.observed-event/0.2', 'event': event, 'host': host, 'profile': profile,
-                'session': str(payload.get('session_id') or ''), 'turn': payload.get('turn_id') or payload.get('prompt_id'),
-                'at': time.time(), 'workspace': str(workspace)}
+    host, codex_home, session = host_identity.hook_identity(payload)
+    # Optional keys only: 0.10.0 drops a spool file whose schema it does not know. 'profile' stays for older
+    # drains; the observer resolves the profile from the Codex home or the transcript path.
+    document = {'schema': 'ekk.observed-event/0.2', 'event': event, 'host': host, 'profile': None,
+                'session': session or '', 'turn': payload.get('turn_id') or payload.get('prompt_id'),
+                'at': time.time(), 'workspace': str(workspace), 'runtime': __version__}
+    transcript = host_identity.bounded(payload.get('transcript_path'), host_identity.MAX_PATH_CHARS)
+    if transcript:
+        document['transcript_path'] = transcript
+    if codex_home:
+        document['codex_home'] = codex_home
     if event == 'UserPromptSubmit':
         # Every prompt marks a turn in progress; its text is kept only when it reads as a correction.
         text = observation.owner_text(payload.get('prompt') or payload.get('user_input'))

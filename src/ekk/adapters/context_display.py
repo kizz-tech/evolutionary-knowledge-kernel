@@ -1,5 +1,6 @@
 """Optional CLI display projection; never an application or acceptance input."""
 from copy import deepcopy
+from ..application.workspace import work_navigation
 import json
 import re
 
@@ -17,6 +18,16 @@ _FRONT_MATTER = re.compile(r'\A\s*---[ \t]*\n.*?\n(?:---|\.\.\.)[ \t]*(?:\n|\Z)'
 _NOT_PROSE = re.compile(r'\s*(?:[-*+]\s|\d+[.)]\s|\||>|!\[|<!--)')
 _RULE = re.compile(r'\s*(?:[-*_=]\s*){3,}$')
 _SENTENCE_END = re.compile(r'[.!?…。](?=["\')\]»”]*(?:\s|$))')
+
+
+def work_navigation_argv(reference, current_reference=None, *, historical=False):
+    """CLI navigation opens the exact revision its label describes."""
+    navigation = work_navigation(reference, current_reference, historical=historical)
+    for key in ('selected', 'current'):
+        if key in navigation:
+            ref = navigation[key]['reference']
+            navigation[key]['argv'] = ['ekk', 'enter', '--resume', json.dumps(ref, separators=(',', ':'))]
+    return navigation
 
 
 def _size(value):
@@ -88,7 +99,11 @@ def brief_context(result, *, budget=4000):
         metadata = row['metadata']
         reference = {'realm': realm, 'id': row['id'], 'revision': metadata['revision'], 'digest': 'sha256:' + row['digest']}
         if row.get('mandatory') or row.get('governs'):
-            required.append({**deepcopy(row), 'reference': reference})
+            entry = {**deepcopy(row), 'reference': reference}
+            if metadata.get('work', {}).get('schema') == 'ekk.work/0.1':
+                entry['navigation'] = work_navigation_argv(reference, row.get('current_reference'),
+                    historical=bool(row.get('historical')))
+            required.append(entry)
             continue
         selection = row.get('selection', 'ranked')
         if selection == 'dependency':
@@ -111,6 +126,10 @@ def brief_context(result, *, budget=4000):
               'unknowns': result['unknowns'], 'conflicts': result['conflicts'], 'warnings': result.get('warnings', []),
               'required_reading': required, 'items': [], 'omitted_count': len(manifest.get('omitted', [])),
               'snapshot': manifest['snapshots'], 'next': list(NEXT)}
+    if any(r.get('historical') and r['metadata'].get('work', {}).get('schema') == 'ekk.work/0.1'
+           for r in result['records']):
+        output['next'] = ['For selected work use navigation.selected.argv; navigation.current opens a separately identified revision.',
+                          'omit --brief for the full projection']
     if left_out:
         output['governing_left_out'] = left_out  # fetch each: it applies to this scope
     for key in ('repository_checks', 'realm_alias', 'owner_projection'):
@@ -150,6 +169,12 @@ def brief_context(result, *, budget=4000):
         work = metadata.get('work', {})
         if work.get('schema') == 'ekk.work/0.1':
             item['continuation'] = {k: v for k, v in work.items() if k in ('status', 'next_step', 'domain')}
+            # Required selections may be historical. Never describe them using
+            # an ID-only link that silently opens the current revision.
+            item.pop('id', None)
+            item['ref'] = reference
+            item['navigation'] = work_navigation_argv(reference, row.get('current_reference'),
+                historical=bool(row.get('historical')))
         if selection == 'required':
             output['items'].append(item)  # pinned or required ground: always listed, title only
         elif used + _size(item) > budget:

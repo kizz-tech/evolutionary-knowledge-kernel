@@ -14,13 +14,14 @@ from unittest.mock import patch
 
 from ekk.adapters import coding_assessment as adapter
 from ekk.adapters.command_line import dispatch, main, parser, service
+from ekk.adapters.host_identity import SCRUB_VARIABLES
 
 
 class CodingAssessmentTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory(); self.addCleanup(temp.cleanup)
         self.root = Path(temp.name).resolve()
-        environment = {k: v for k, v in os.environ.items() if not k.startswith(('EKK_', 'GIT_'))}
+        environment = {k: v for k, v in os.environ.items() if not k.startswith(('EKK_', 'GIT_')) and k not in SCRUB_VARIABLES}
         environment.update(EKK_CONFIG_HOME=str(self.root / 'config'),
             EKK_DATA_HOME=str(self.root / 'data'), EKK_CACHE_HOME=str(self.root / 'cache'))
         env = patch.dict(os.environ, environment, clear=True)

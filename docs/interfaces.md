@@ -15,9 +15,16 @@ trusted-local mode.
 
 The common result includes operation status, the snapshot used, data, source
 references, incompleteness, warnings, and confirmed/unconfirmed guarantees. Errors
-distinguish invalid_format, unresolved_binding, access_denied, stale_snapshot,
-unresolved_conflict, unsupported_capability, source_unavailable, and recovery_required.
-A denial message does not reveal prohibited content or another owner's metadata.
+distinguish invalid_request, invalid_format, unresolved_binding, access_denied,
+stale_snapshot, unresolved_conflict, unsupported_capability, source_unavailable, and
+recovery_required. invalid_request is a request the caller can correct: the error
+names the request option or field (`option`) and, where needed, a `refusal`, the full
+`record_ids` and a `next` command. In 0.10.1 invalid_request covers option and JSON
+input checks, the accept and decide declarations, unknown IDs, the context budget and
+the fetch byte limit. Other validation errors, including search bounds and modes and
+read-source byte ranges, remain invalid_format until 0.11, as do damaged records and
+files. A denial message does not reveal prohibited content or another owner's
+metadata.
 
 ## Proposals
 

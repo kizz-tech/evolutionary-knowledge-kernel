@@ -2,23 +2,25 @@
 release: "EKK-R-1.0"
 target_version: "1.0.0"
 phase: delivered
-updated: "2026-10-02"
+updated: "2026-10-11"
 scope: owner_delegated_decisions_recorded
-implementation: runtime_0.9.1_committed
-technical_verification: runtime_0.9.1_tested
-local_delivery: runtime_0.9.1_installed
-public_preparation: runtime_0.9.1_export_prepared
-public_publication: runtime_0.9.0_published_0.9.1_requested
+implementation: runtime_0.10.1_committed
+technical_verification: runtime_0.10.1_tested
+local_delivery: runtime_0.10.1_installed
+public_preparation: runtime_0.10.1_export_prepared
+public_publication: runtime_0.9.1_published_0.10.1_in_progress
 benefit: baseline_measured_comparison_not_run
-current_authority: implementation_of_delegated_scope
+current_authority: target_1.0_accepted_by_owner_statement
 ---
 
 # Current release state
 
 The owner asked for the whole 1.0 design to be implemented and delegated the
-open decisions on 2 October (D-1.0-09 to D-1.0-21 in [decisions](decisions.md)).
-0.8.4 (write path) and 0.9.0 (experience, current-first entry, the contract,
-evidence, advisor in shadow) are the result. Delegation (G) and recall at a
+open decisions on 2 October (D-1.0-09 to D-1.0-21 in [decisions](decisions.md)),
+and accepted the 1.0 target as the governing direction the same day.
+0.8.4 (write path), 0.9.0 (experience, current-first entry, the contract,
+evidence, advisor in shadow) and 0.9.1 (the owner's word as the input of
+authority, documents as projections) are the result. Delegation (G) and recall at a
 change of focus are deferred with recorded reasons.
 
 ## Done
@@ -50,6 +52,24 @@ change of focus are deferred with recorded reasons.
   0.9.0 code are closed here (D-1.0-22, D-1.0-23). Installed on 2026-10-02 with
   `tools/local_install.py` after the equivalence gate against 0.9.0 (17 real
   requests identical) and `warm`; the hourly launch agent is registered.
+- The 1.0 target (`EKK-R-1.0`) is the governing direction since 2026-10-02:
+  the owner accepted it in a chat session and the agent relayed the statement
+  with `ekk accept --statement-file` (`via: host_chat`); the receipt holds the
+  owner's words. The 0.5 direction is superseded, and the context `context:ekk`
+  names the target as its basis (revision 4): while it still named the replaced
+  0.5 record, entry in the realm was blocked with `declared context basis is not
+  a current accepted commitment`, so a context's basis must follow its accepted
+  successor. The delegated decisions D-1.0-01 to D-1.0-26 stay proposed; they
+  are current knowledge selected by ranking, not governing reading.
+- 0.9.1 published on 2026-10-02 as the public prerelease v0.9.1 (commit
+  `9992890`), assets read back and verified.
+- 0.10.0 (exact continuation, discovery through linked observations,
+  declared-file retention, reading receipts) was installed locally on 2026-10-05
+  and not published on its own ([status](../0.10/status.md)). 0.10.1 (explicit
+  counted expiry, declared provenance, `accept --id --words`, one host identity)
+  was activated on 2026-10-10 at 23:26:59 UTC ([status](../0.10.1/status.md)) and
+  is prepared as the public prerelease v0.10.1, which carries both. The next step
+  toward this target is [0.11](../0.11/status.md).
 
 ## Local delivery
 
@@ -71,7 +91,7 @@ change of focus are deferred with recorded reasons.
 | ID | Action | Why |
 | --- | --- | --- |
 | Q7 | Trust the EKK hooks in each Codex profile (`/hooks` in the TUI, or "Trust all and continue" at start) | Codex runs a new hook only after the owner trusts it; "trust all" also trusts any other hook registered in that profile |
-| Q8 | Once a week: `ekk observe review`, mark the page, `ekk observe apply-review FILE` | The page is the only source of owner verdicts; it measures the correction rule, the episode rule and the ranking priors, and it is where held results and preferences are kept |
+| Q8 | Once a week: `ekk observe review`, mark the page, `ekk observe apply-review --owner-marked-page FILE` (or `--relayed --words REPLY FILE` when an agent relays the owner's reply) | The page is the only source of owner verdicts; it measures the correction rule, the episode rule and the ranking priors, and it is where held results and preferences are kept |
 | Q9 | After two weeks of hooks: rerun the field-use report against the September baseline | Retention after changes and repeated corrections are the primary measures; nothing in 0.9.0 is yet shown to help |
 
 ## Next

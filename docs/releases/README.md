@@ -6,6 +6,9 @@ together, using the same lightweight discipline as feature specifications.
 
 | Release | Product outcome | Authoritative package |
 | --- | --- | --- |
+| 0.11, planned local increment after 0.10.1 | Every real session counted correctly, the owner's review independent of any host's schedule, entry and publication within the 1.0 targets, every host serving EKK on the active runtime | [Specification](0.11/spec.md), [status](0.11/status.md), [design](0.11/design.md), [tasks](0.11/tasks.md) |
+| 0.10.1, local increment, installed on 2026-10-10 | Nothing the owner has not judged is lost silently; nothing is attributed to the owner that the owner did not declare | [Specification](0.10.1/spec.md), [status](0.10.1/status.md), [tasks](0.10.1/tasks.md); design in [0.11](0.11/design.md) |
+| 0.10, local workflow increment | Reliable preservation, discovery, exact continuation and reading attribution across work phases | [Specification](0.10/spec.md), [status](0.10/status.md), [design](0.10/design.md) |
 | 1.0, planned target | Past work measurably improves the next work, in every host, proven in real use | [Specification](1.0/spec.md), [status](1.0/status.md), [tasks](1.0/tasks.md), [decisions](1.0/decisions.md) |
 | 0.9, delivered as runtime 0.9.0 inside the 1.0 package (D-1.0-06) | Observations acquired during work and recalled for later decisions | [Specification](0.9/spec.md), [status](0.9/status.md); delivery evidence in [1.0 status](1.0/status.md) |
 | 0.8, historical layout | Continuous work, proportionate context and recoverable operations | [Specification](../plans/v0.8/spec.md), [implementation and delivery](../plans/v0.8/implementation.md) |

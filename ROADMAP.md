@@ -1,19 +1,22 @@
 # Roadmap
 
-**Next product release: 0.9 — acquire useful observations during work and recall
-them when a later decision makes them relevant.**
+**Current product target: 1.0 — past work measurably improves the next work,
+in the declared hosts, proven in real use.**
 
-Product planning updated **2026-09-21**. The [0.9 specification](docs/releases/0.9/spec.md),
-[design](docs/releases/0.9/design.md), [tasks](docs/releases/0.9/tasks.md) and
-[current status](docs/releases/0.9/status.md) form one working release package.
-Implementation and delivery state live there. The first slice establishes actual
-host event and recall-delivery capabilities; a post-task log reader alone does not fulfill the
-connected outcome. [Release organization](docs/releases/README.md) defines the
-shared format and separates implementation, local delivery, publication and benefit.
+Product navigation updated **2026-10-11**. The [1.0 specification](docs/releases/1.0/spec.md),
+[design](docs/releases/1.0/design.md), [tasks](docs/releases/1.0/tasks.md) and
+[current status](docs/releases/1.0/status.md) form the owning release package.
+Runtime 0.10.1 is the current implementation, and the [0.11 package](docs/releases/0.11/README.md)
+plans the next step toward the target; the field-use benefit comparison remains
+not run. Implementation, delivery and evidence states live in those packages.
+The [0.9 package](docs/releases/0.9/spec.md) owns the observation and recall
+mechanics incorporated into the 1.0 target. [Release organization](docs/releases/README.md)
+defines the shared format and separates implementation, local delivery, publication
+and benefit. Conditional later work is described under [follow-on choices](#follow-on-choices).
 
-The research sequence below retains its **2026-09-09** framing unless a section
-states a later change. It connects the [open research agenda](research/agenda.md)
-to contributor work and remains independent of the 0.9 product release gate.
+The research sequence and its starting-point table below retain their **2026-09-09**
+framing unless a section states a later change. They connect the [open research agenda](research/agenda.md)
+to contributor work; exact protocols and results remain with their studies.
 Ordinary use and selected real episodes guide product improvement; no artificial
 agent competition or scientific win is required for local delivery. Research
 questions remain open even when an engineering task is complete. Task IDs do not

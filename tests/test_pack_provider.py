@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 from ekk.assets import pack_directory
 from ekk.adapters.command_line import service
+from ekk.adapters.host_identity import SCRUB_VARIABLES
 from ekk.adapters.packs import PackDirectory
 
 
@@ -15,8 +16,8 @@ class PackProviderTests(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name).resolve()
-        clean = {k: v for k, v in os.environ.items() if not k.startswith('EKK_')}
-        clean.update(EKK_DATA_HOME=str(self.root/'data'))
+        clean = {k: v for k, v in os.environ.items() if not k.startswith('EKK_') and k not in SCRUB_VARIABLES}
+        clean.update(EKK_DATA_HOME=str(self.root/'data'), EKK_CONFIG_HOME=str(self.root/'config'), EKK_CACHE_HOME=str(self.root/'cache'))
         env = patch.dict(os.environ, clean, clear=True)
         env.start(); self.addCleanup(env.stop)
         self.bundled = pack_directory()

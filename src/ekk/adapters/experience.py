@@ -15,6 +15,7 @@ import time
 
 from .. import observation
 from ..application import experience as rules
+from . import host_identity
 from .experience_store import ExperienceStore
 from .observe_hook import card_path, observed_home, repositories, switched_off, workspace_of
 
@@ -24,7 +25,7 @@ MAX_TRANSCRIPT_TAIL = 2 * 1024 * 1024
 STATE_FRESH_SECONDS = 5 * 60
 MAX_DIRTY_PATHS = 200
 PUBLISHED = ('read_back', 'read_back_and_discoverable')
-SETTLED = ('queued', 'published', 'held', 'rejected', 'skipped', 'failed')
+SETTLED = ('queued', 'published', 'held', 'rejected', 'skipped', 'failed', 'expired_unreviewed', 'linked', 'not_owner_work')
 
 
 # ----------------------------------------------------------------- repositories
@@ -193,13 +194,15 @@ def queue_states(workspace, profile, keys):
 class Observer:
     def __init__(self, store=None, *, retain=retain_through_queue, states=queue_states, clock=time.time):
         self.store, self.retain, self.states, self.clock = store or ExperienceStore(), retain, states, clock
-        self.touched = set()
+        self.touched, self.attempted, self.expired = set(), set(), {}
+        self._profile_of = None
 
     # -- spool -------------------------------------------------------------------
     def ingest(self):
         spool = self.store.directory / 'spool'
         if not spool.is_dir():
             return 0
+        self._profile_of = None  # the caller registry is read again on each pass
         documents = []
         for path in sorted(spool.glob('*.json')):
             try:
@@ -236,8 +239,10 @@ class Observer:
         if bound is None:
             self.store.count('unroutable')
             return False
-        common = dict(host=document.get('host'), profile=document.get('profile'), session=str(document.get('session') or ''),
-                      turn=document.get('turn'), workspace=workspace, realm=bound['realm'], at=at)
+        common = dict(host=document.get('host'), profile=self._profile(document), session=str(document.get('session') or ''),
+                      turn=document.get('turn'), workspace=workspace, realm=bound['realm'], at=at,
+                      runtime=host_identity.bounded(document.get('runtime'), 64),
+                      transcript_path=host_identity.bounded(document.get('transcript_path'), host_identity.MAX_PATH_CHARS))
         self.touched.add(workspace)
         if event == 'UserPromptSubmit':
             added = self.store.add_event(kind='prompt', state='used', **common)
@@ -272,6 +277,21 @@ class Observer:
         if event == 'SessionEnd':
             return bool(self.store.add_event(kind='end', state='used', extra={**state, 'reason': document.get('reason')}, **common))
         return False
+
+    def _profile(self, document):
+        """The fleet key of the Codex home the hook saw, mapped as the journal maps CODEX_HOME; None otherwise.
+
+        The spooled profile is never used: the hook cannot read the registry.
+        """
+        if document.get('host') != 'codex':
+            return None
+        home = (host_identity.bounded(document.get('codex_home'), host_identity.MAX_PATH_CHARS)
+                or host_identity.transcript_home(document.get('transcript_path') or document.get('transcript')))
+        if home is None:
+            return None
+        if self._profile_of is None:
+            self._profile_of = host_identity.profile_lookup()
+        return self._profile_of(home)
 
     # -- episodes ----------------------------------------------------------------
     def close_episodes(self):
@@ -319,8 +339,8 @@ class Observer:
                 workspace, session, baseline_at or first['at'], last['at'], idle=rules.IDLE_SECONDS, turn=rules.MAX_TURN_SECONDS)
             action, reason = rules.disposition(reports, changes, others_active=others)
             covered = [report['id'] for report in reports]
-            common = dict(workspace=workspace, realm=first['realm'], host=host, session=session, first_at=first['at'],
-                          last_at=last['at'], reason=reason, covers=json.dumps(covered))
+            common = dict(workspace=workspace, realm=first['realm'], host=host, profile=first.get('profile'), session=session,
+                          first_at=first['at'], last_at=last['at'], reason=reason, rule=rules.EPISODE_RULE, covers=json.dumps(covered))
             if action == 'skip':
                 self.store.set_event_state(covered, 'skipped', clear_text=True)
                 self.store.save_episode(key, state='skipped', **common)
@@ -343,6 +363,7 @@ class Observer:
 
     def publish(self, key, workspace, request, covered, reason=''):
         """Queue a composed outcome; on refusal it stays composed for the next pass."""
+        self.attempted.add(key)
         bound = workspace_binding(workspace)
         reason = reason.split('; last error', 1)[0]
         try:
@@ -357,6 +378,22 @@ class Observer:
         self.store.save_episode(key, state='queued', reason=reason)
         self.store.count('episodes_queued')
         return 1
+
+    def retry_composed(self):
+        """Queue composed outcomes from their episode rows, which outlive their reports' 30 days.
+
+        A key already attempted in this pass is not retried, nor is a request that is not JSON.
+        """
+        queued = 0
+        for episode in self.store.episodes('composed'):
+            if episode['key'] in self.attempted or not episode['request']:
+                continue
+            try:
+                request, covered = json.loads(episode['request']), json.loads(episode['covers'])
+            except ValueError:
+                continue
+            queued += self.publish(episode['key'], episode['workspace'], request, covered, episode['reason'] or '')
+        return queued
 
     def reconcile(self):
         """Follow queued outcomes to publication; the composed text is dropped once the realm holds it."""
@@ -398,14 +435,19 @@ class Observer:
                 self.store.count('cards_failed')
 
     def run(self):
-        total = 0
+        """One pass: ingest, close episodes, retry composed ones, follow publication, then expire on the observer clock.
+
+        The only caller of the full expiry; its counted deltas are kept in ``expired``.
+        """
+        total, self.attempted = 0, set()
         for attempt in range(20):  # events that arrive while this pass works are taken by the same worker
             ingested = self.ingest()
             if attempt and not ingested:
                 break
             total += self.close_episodes()
+        total += self.retry_composed()
         self.refresh_cards(self.reconcile())
-        self.store.expire(self.clock())
+        self.expired = self.store.expire(self.clock())
         return total
 
 
@@ -484,7 +526,9 @@ def drain(*, background=False):
             fcntl.flock(lock, fcntl.LOCK_EX)
         store = ExperienceStore(directory)
         try:
-            queued = Observer(store).run()
-            return {'schema': 'ekk.observer/0.1', 'state': 'drained', 'episodes_queued': queued, 'stats': store.stats()}
+            observer = Observer(store)
+            queued = observer.run()
+            return {'schema': 'ekk.observer/0.1', 'state': 'drained', 'episodes_queued': queued, 'expired': observer.expired,
+                    'stats': store.stats()}
         finally:
             store.close()

@@ -81,8 +81,20 @@ digest of the rule content (the cue patterns and bounds of
 message after a report). `baseline` refuses a run collected under other rule
 content even when the rule name is the same, and `report` then labels the counts
 with the rule recorded in the run and states that they are not comparable. A
-test pins the digest of the current rule, so editing the rule without a new
-version fails.
+test pins the digest of each rule, so editing a rule without a new version
+fails.
+
+`ekk.correction-rule/1` gates comparisons with the September 2026 baseline and
+is never edited. `ekk.correction-rule/2` is a secondary series: it also excludes
+whole turns from another agent session, question-widget answers and scheduled
+runs, removes the artifact view context before the owner's words, reads the
+Russian second-person cue ("you ... not") at a word boundary and knows more
+repeat phrases. Owner turns are the ones rule 1 keeps; rule 2 may exclude some
+of them and judges its own text, so its counts have their own denominator. Each row of `messages.jsonl` carries
+rule 1's flags as its own fields and rule 2's under `rules`; `run.json` lists
+every rule's digest under `correction_rules`. `baseline --rule
+ekk.correction-rule/2` writes `corrections-baseline-correction-rule-2.json` beside
+rule 1's file and records both digests, because its owner turns come from rule 1.
 
 Transcripts cannot show the stores, so outcomes that EKK records itself are
 merged by the integrator: `report --host-events FILE` takes a JSON list of

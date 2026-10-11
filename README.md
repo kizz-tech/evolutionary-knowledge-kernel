@@ -9,6 +9,14 @@ edit with sufficient context needs no EKK call and no new record. Practical
 software, research and personal-work guidance is optional; usefulness is assessed
 through ordinary work, feedback and selected logs.
 
+[Release 0.10.1](docs/release-notes-0.10.1.md) keeps everything the owner has not
+judged until it expires explicitly and with a count, requires declared provenance
+for relayed reviews and decisions, accepts by ID with the owner's words, and reads
+one host identity.
+
+[Release 0.10.0](docs/release-notes-0.10.0.md) adds exact continuation,
+discovery through linked observations, declared-file retention and exact reading
+receipts, with optional guidance for research, design, planning and implementation.
 [Release 0.9.1](docs/release-notes-0.9.1.md) (on [0.9.0](docs/release-notes-0.9.0.md)) records experience from the host's
 own events (a session's final report, the owner's corrections), shows current
 knowledge first, delivers one [agent contract](docs/agent-contract.md) at session
@@ -79,7 +87,7 @@ operations and their boundaries.
 
 The local kernel retains stable IDs, exact source bytes, versions, provenance,
 controlled writes and acceptance receipts. The record format remains **0.1**.
-Runtime **0.9.1** has one active CLI; old runtimes are explicit historical replay
+Runtime **0.10.1** has one active CLI; old runtimes are explicit historical replay
 artifacts outside the installed package. No company data is moved into personal
 storage by entry or this migration.
 

@@ -1,6 +1,9 @@
 """Work items are ordinary owner-held records; no parallel knowledge database."""
 from copy import deepcopy
 from ..application.work import work_projection
+from ..application.workspace import exact_reference
+from .context_display import work_navigation_argv
+from ..application.discovery import terms, rank
 from ..model import Conflict, digest
 from .retention import _once
 
@@ -70,30 +73,84 @@ class RealmWorkRepository:
         return _once(app,operation='work',fingerprint=lambda identity:[identity,'work',request],
                      build=build,scopes=self.scopes,key=key)
 
-    def show(self, reference):
-        snapshot, realm, policy, records, row = self._row(reference)
+    def _events(self, row, realm, policy, records):
+        """Only the bounded, exact linked events under today's read authority."""
         events=[];unavailable=0
         work=row['metadata']['work']
-        for ref in work.get('events',[]):
+        references=work.get('events',[])
+        for ref in references[-64:]:
             try:
+                ref=exact_reference(ref)
                 if ref['realm']!=realm['id']:raise PermissionError('Event belongs to another realm')
                 event=self.app._reference(ref,records)
                 self.app._query_readable(event,records,policy,self.scopes)
                 marker=event['metadata'].get('work_event',{})
-                if marker.get('work_id') != row['metadata']['id']:raise ValueError('Unrelated work event')
-                events.append({'reference':ref,'kind':marker['kind'],'body':event['body']})
-            except (ValueError,KeyError,OSError):unavailable+=1
+                if marker.get('schema') != 'ekk.work-event/0.1' or marker.get('work_id') != row['metadata']['id']:
+                    raise ValueError('Unrelated work event')
+                candidates=records
+                historic=event.get('snapshot_revision')
+                if historic and candidates and historic!=next(iter(candidates.values())).get('snapshot_revision'):
+                    candidates=self.app._load(self.app.store.snapshot(historic),historical=True)[-1]
+                basis=[self.app._query_reference(realm['id'],self.app._reference(ground,candidates))
+                    for ground in event['metadata'].get('basis',[])]
+                events.append({'reference':deepcopy(ref),'kind':marker['kind'],'body':event['body'],
+                    'basis':basis,
+                    **({'improvement':deepcopy(event['metadata']['improvement'])} if event['metadata'].get('improvement') else {})})
+            except (PermissionError,ValueError,KeyError,OSError):unavailable+=1
+        earlier=max(0, max(work.get('event_count',0),len(references))-min(64,len(references)))
+        return events,unavailable,earlier
+
+    def show(self, reference):
+        snapshot, realm, policy, records, row = self._row(reference)
+        work=row['metadata']['work']
+        events,unavailable,earlier=self._events(row,realm,policy,records)
         result=work_projection(reference,row['metadata']['title'],work,events,unavailable=unavailable)
-        result['earlier_events']=max(0,work.get('event_count',0)-len(work.get('events',[])))
+        result['earlier_events']=earlier
+        result['incomplete']=bool(unavailable or earlier)
+        current=records.get(row['metadata']['id'])
+        historical=current is None or current['digest']!=row['digest']
+        current_ref=None
+        if historical and current is not None:
+            try:self.app._query_readable(current,records,policy,self.scopes)
+            except (PermissionError,ValueError,KeyError,OSError):pass
+            else:current_ref=self.app._query_reference(realm['id'],current)
+        result['historical']=historical
+        result['navigation']=work_navigation_argv(reference,current_ref,historical=historical)
         result['snapshot']=snapshot['revision']
         return result
 
     def find(self, query, *, limit=10):
-        hits=self.app.search_records(self.scopes,query=query,limit=limit,match='ranked',work_only=True)
-        results=[]
-        for hit in hits['results']:
-            work=hit['work']
-            results.append({'title':hit['title'],'reference':hit['reference'],'status':work['status'],
-                            'intention':work['intention'],'next_step':work.get('next_step','')})
+        if not isinstance(query,str) or len(query)>2000:raise ValueError('query must be bounded text')
+        if type(limit) is not int or not 1<=limit<=100:raise ValueError('limit must be between 1 and 100')
+        snapshot,realm,policy,records=self.app._query_view(self.scopes)
+        query_terms=terms(query)
+        results=[];unavailable=earlier=scanned=0
+        for row in records.values():
+            metadata=row['metadata'];work=metadata.get('work',{})
+            if work.get('schema')!='ekk.work/0.1' or not set(metadata['scope']) & set(self.scopes):continue
+            try:self.app._query_readable(row,records,policy,self.scopes)
+            except PermissionError:continue
+            events,missing,old=self._events(row,realm,policy,records)
+            unavailable+=missing;earlier+=old;scanned+=len(events)
+            text='\n'.join([metadata['id'],metadata['title'],*metadata.get('aliases',[]),row['body']])
+            matches=[]
+            direct=rank(query_terms,[(None,text)],metadata['title'],metadata.get('aliases',[]),'ranked')
+            if direct is not None:
+                matches.append({'kind':'work',**direct,'why':'matches current work text'})
+            if query_terms:
+                for event in events:
+                    found=rank(query_terms,[(None,event['body'])],'',[],'ranked')
+                    if found is not None:
+                        matches.append({'kind':'event','reference':event['reference'],**found,
+                            'why':'matches a readable exact event linked to this current work'})
+            if not matches:continue
+            score=max(m['score'] for m in matches)
+            results.append({'title':metadata['title'],'reference':self.app._query_reference(realm['id'],row),
+                'status':work['status'],'intention':work['intention'],'next_step':work.get('next_step',''),
+                'score':score,'matches':matches,'unavailable_events':missing,'earlier_events':old})
+        results.sort(key=lambda hit:(-hit['score'],hit['reference']['id']))
         return {'schema':'ekk.work-search/0.1','results':results[:limit],
-                'incomplete':hits['incomplete'] or len(results)>limit,'snapshot':hits['snapshot']}
+                'incomplete':bool(unavailable or earlier or len(results)>limit),'snapshot':snapshot['revision'],
+                'event_coverage':{'max_events_per_work':64,'readable_events_scanned':scanned,
+                    'unavailable_events':unavailable,'earlier_events':earlier,
+                    'coverage':'current authorized work and its bounded linked exact events only'}}

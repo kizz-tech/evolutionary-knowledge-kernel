@@ -3,10 +3,13 @@ import io
 import json
 import os
 from pathlib import Path
+import shlex
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 from ekk.adapters.command_line import main
+from ekk.adapters.host_identity import SCRUB_VARIABLES
 
 class CurrentCliTests(unittest.TestCase):
     def setUp(self):
@@ -14,6 +17,7 @@ class CurrentCliTests(unittest.TestCase):
         self.root=Path(self.tmp.name).resolve();self.realm=self.root/'realm'
         self.env=patch.dict(os.environ,{'EKK_DATA_HOME':str(self.root/'data'),'EKK_CONFIG_HOME':str(self.root/'config')})
         self.env.start();self.addCleanup(self.env.stop)
+        for name in SCRUB_VARIABLES:os.environ.pop(name,None)  # decide records the host session it runs in
         code,data=self.call(['init','--root',str(self.realm),'--title','Example'])
         self.assertEqual(code,0,data)
         from ekk.adapters.command_line import service
@@ -75,7 +79,7 @@ class CurrentCliTests(unittest.TestCase):
         self.assertEqual(code,2,error)
     def test_decide_is_queued_like_retain_and_accept_keeps_the_owners_statement(self):
         statement=self.root/'decision.md';statement.write_text('Keep BM25 as the fixed baseline.\n')
-        args=['decide','--root',str(self.realm),'--scope',self.scope,'--title','BM25 stays','--result-file',str(statement),'--reason','Models start in shadow']
+        args=['decide','--root',str(self.realm),'--scope',self.scope,'--title','BM25 stays','--result-file',str(statement),'--reason','Models start in shadow','--stated-by','agent']
         with patch('ekk.adapters.activity_cli.start_worker',return_value={'started':False,'test':True}):
             code,queued=self.call(args)
             self.assertEqual(code,0,queued)
@@ -97,13 +101,13 @@ class CurrentCliTests(unittest.TestCase):
         self.assertIn(read['metadata']['decision']['source']['host'],{'claude-code','codex','unknown'})  # environment markers, never a terminal check
         # A later decision replaces it exactly and rests on it; a note cannot be replaced by a decision.
         code,later=self.call(['decide','--root',str(self.realm),'--scope',self.scope,'--title','BM25 stays until measured','--result-file',str(statement),
-                              '--supersedes',reference['id'],'--ground',reference['id'],'--wait'])
+                              '--supersedes',reference['id'],'--ground',reference['id'],'--stated-by','agent','--wait'])
         self.assertEqual(code,0,later)
         code,read_later=self.call(['fetch','--root',str(self.realm),'--scope',self.scope,'--id',later['result_reference']['id']])
         exact={k:reference[k] for k in ('id','revision','digest')}
         self.assertEqual(([exact],exact),(read_later['metadata']['supersedes'],{k:read_later['metadata']['basis'][1][k] for k in exact}))
         note=self.app._meta('note','Note',[self.scope]);self.app.apply(self.app.propose({f"records/{note['id']}.md":self.app.codec.encode(note,'A note.')}),idempotency_key='note')
-        code,error=self.call(['decide','--root',str(self.realm),'--scope',self.scope,'--title','x','--result-file',str(statement),'--supersedes',note['id'],'--wait'])
+        code,error=self.call(['decide','--root',str(self.realm),'--scope',self.scope,'--title','x','--result-file',str(statement),'--supersedes',note['id'],'--stated-by','agent','--wait'])
         self.assertEqual(code,2,error);self.assertIn('supersedes a decision or an outcome',error['message'])
         code,error=self.call(['retain','--root',str(self.realm),'--scope',self.scope,'--title','x','--reason','y'],{'body':'z'})
         self.assertEqual(code,2,error);self.assertIn('decide options only',error['message'])
@@ -129,6 +133,112 @@ class CurrentCliTests(unittest.TestCase):
         self.assertEqual(code,0,plain);self.assertNotIn('statement',plain)  # without a statement the receipt says nothing about who spoke
         code,error=self.call(['retain','--root',str(self.realm),'--scope',self.scope,'--statement-file',str(words)],{'body':'z','title':'t'})
         self.assertEqual(code,2,error)
+    def records(self):
+        from ekk.adapters.command_line import service
+        app=service(self.realm);return app._load(app.store.snapshot())[-1],app.store.snapshot()['files']
+    def queued(self):
+        from ekk.adapters import activity_cli
+        store=activity_cli.local_store(self.app,self.app.initial_realm_id)
+        try:return [json.loads(row[0]) for row in store.db.execute('SELECT request FROM outbox ORDER BY updated')]
+        finally:store.close()
+    def test_decide_refuses_without_a_declaration_of_who_stated_it(self):
+        base=['--root',str(self.realm),'--scope',self.scope]
+        statement=self.root/'decision.md';statement.write_text('Keep the queue.\n')
+        words=self.root/'words.md';words.write_text('\u0414\u0430, \u043e\u0447\u0435\u0440\u0435\u0434\u044c \u043e\u0441\u0442\u0430\u0451\u0442\u0441\u044f.\n')
+        blank=self.root/'blank.md';blank.write_text(' \n')
+        latin=self.root/'latin.md';latin.write_bytes('Oui, gardée.'.encode('latin-1'))
+        argv=['decide',*base,'--title','Queue stays','--result-file',str(statement),'--reason','Writes block']
+        command=(f'ekk decide --cwd {shlex.quote(str(Path.cwd()))} --root {shlex.quote(str(self.realm))} --scope {shlex.quote(self.scope)} '
+                 f"--title 'Queue stays' --result-file {shlex.quote(str(statement))} --reason 'Writes block'")
+        session={'CLAUDECODE':'1','CLAUDE_CODE_SESSION_ID':'s-1'}
+        json_only=['decide',*base,'--title','Queue stays']
+        cases=[
+            (argv,None,{},'stated_by_missing','--stated-by',None),
+            (json_only,{'body':'Keep the queue.'},session,'stated_by_missing','--stated-by',None),
+            (argv+['--stated-by','owner-relayed'],None,session,'words_missing','--owner-words',command+' --stated-by owner-relayed --owner-words FILE'),
+            (json_only,{'body':'x','stated_by':'owner-relayed'},session,'words_missing','--owner-words',
+             command.split(' --title ')[0]+" --title 'Queue stays' --stdin --stated-by owner-relayed --owner-words FILE"),
+            (argv+['--stated-by','agent','--owner-words',str(words)],None,session,'words_with_agent','--owner-words',None),
+            (json_only,{'body':'x','stated_by':'agent','owner_words':'\u0414\u0430'},session,'words_with_agent','owner_words',None),
+            (argv+['--stated-by','owner-relayed','--owner-words',str(words)],None,{'CLAUDECODE':'1'},'session_identity_missing','--stated-by',None),
+            (json_only,{'body':'x','stated_by':'owner-relayed','owner_words':'\u0414\u0430'},{},'session_identity_missing','--stated-by',None),
+            (argv+['--stated-by','owner-relayed','--owner-words',str(words),'--statement-session','s-2'],None,session,'session_mismatch','--statement-session',None),
+            (argv+['--stated-by','agent','--statement-session','s-2'],None,session,'session_mismatch','--statement-session',None),
+            (json_only,{'body':'x','stated_by':'owner-relayed','owner_words':'\u0414\u0430','statement_session':'s-2'},session,'session_mismatch','statement_session',None),
+            (argv+['--stated-by','owner-relayed','--owner-words',str(blank)],None,session,'words_missing','--owner-words',None),
+            (argv+['--stated-by','owner-relayed','--owner-words',str(latin)],None,session,'words_unreadable','--owner-words',None),
+            (argv+['--stated-by','owner-relayed','--owner-words',str(self.root/'\u0414\u0430, \u043e\u0447\u0435\u0440\u0435\u0434\u044c \u043e\u0441\u0442\u0430\u0451\u0442\u0441\u044f.')],None,session,'words_unreadable','--owner-words',None),
+        ]
+        records=self.app.doctor()['records']
+        for args,body,environment,refusal,option,command_next in cases:
+            with self.subTest(args=args,body=body),patch.dict(os.environ,environment):
+                code,result=self.call(args,body)
+                self.assertEqual((2,'invalid_request',refusal,option),(code,result['error'],result.get('refusal'),result.get('option')),result)
+                self.assertEqual(command_next,result.get('next'))
+        code,error=self.call(argv)
+        self.assertIn(f'`{command} --stated-by agent`',error['message'])
+        self.assertIn(f'`{command} --stated-by owner-relayed --owner-words FILE`',error['message'])
+        self.assertEqual((records,[]),(self.app.doctor()['records'],self.queued()))  # nothing queued or written
+    def test_decide_keeps_the_owners_relayed_words_as_an_exact_source(self):
+        base=['--root',str(self.realm),'--scope',self.scope]
+        statement=self.root/'decision.md';statement.write_text('Keep the queue.\n')
+        words=self.root/'words.md';words.write_text('\u0414\u0430, \u043e\u0447\u0435\u0440\u0435\u0434\u044c \u043e\u0441\u0442\u0430\u0451\u0442\u0441\u044f.\n')
+        other=self.root/'other.md';other.write_text('\u0414\u0430, \u043e\u0447\u0435\u0440\u0435\u0434\u044c \u043e\u0441\u0442\u0430\u0451\u0442\u0441\u044f \u043d\u0430\u0432\u0441\u0435\u0433\u0434\u0430.\n')
+        argv=['decide',*base,'--title','Queue stays','--result-file',str(statement)]
+        relayed=argv+['--stated-by','owner-relayed','--owner-words',str(words)]
+        day=time.strftime('%Y-%m-%d',time.gmtime())
+        with patch.dict(os.environ,{'CLAUDECODE':'1','CLAUDE_CODE_SESSION_ID':'s-1'}),patch('ekk.adapters.activity_cli.start_worker',return_value={'started':False,'test':True}):
+            code,queued=self.call(relayed)
+            self.assertEqual(0,code,queued)
+            self.assertEqual(queued['key'],self.call(relayed+['--statement-session','s-1'])[1]['key'])  # a matching cross-check changes nothing
+            self.assertNotEqual(queued['key'],self.call(argv+['--stated-by','owner-relayed','--owner-words',str(other)])[1]['key'])
+            [request,_]=self.queued()
+            self.assertEqual(({'host':'claude-code','session':'s-1','at':day},['owner-words.md']),
+                             (request['request']['decision']['source'],[item['filename'] for item in request['request']['artifacts']]))
+            code,published=self.call(['decide',*base,'--title','Queue stays, enveloped','--wait'],
+                                     {'request_id':'r-1','operation':'decide','payload':{'body':'Keep the queue.\n','stated_by':'owner-relayed',
+                                                                                         'owner_words':'\u0414\u0430, \u043e\u0447\u0435\u0440\u0435\u0434\u044c \u043e\u0441\u0442\u0430\u0451\u0442\u0441\u044f.\n'}})
+            self.assertEqual(0,code,published)
+            code,same=self.call(['decide',*base,'--title','Queue stays, in the owner\'s words','--wait'],
+                                {'body':'\u0414\u0430, \u043e\u0447\u0435\u0440\u0435\u0434\u044c \u043e\u0441\u0442\u0430\u0451\u0442\u0441\u044f.\n','stated_by':'owner-relayed','owner_words':'\u0414\u0430, \u043e\u0447\u0435\u0440\u0435\u0434\u044c \u043e\u0441\u0442\u0430\u0451\u0442\u0441\u044f.\n'})
+            self.assertEqual(0,code,same)
+            code,agent=self.call(['decide',*base,'--title','Queue stays, by the agent','--result-file',str(statement),'--stated-by','agent','--wait'])
+            self.assertEqual(0,code,agent)
+        records,files=self.records()
+        def read(result):
+            return records[result['data']['result_reference']['id'] if 'data' in result else result['result_reference']['id']]['metadata']
+        def source_bytes(reference):
+            asset=records[reference['id']]['metadata']['source']['assets'][0]
+            return asset['path'].rsplit('/',1)[-1],files[asset['path']]
+        enveloped=read(published)
+        self.assertEqual(({'schema':'ekk.decision/0.1','stated_by':'owner_relayed','source':{'host':'claude-code','session':'s-1','at':day}},'owner_statement'),
+                         (enveloped['decision'],enveloped['retention']['claim_source']))
+        self.assertEqual([('decision.md',b'Keep the queue.\n'),('owner-words.md','\u0414\u0430, \u043e\u0447\u0435\u0440\u0435\u0434\u044c \u043e\u0441\u0442\u0430\u0451\u0442\u0441\u044f.\n'.encode())],[source_bytes(ref) for ref in enveloped['basis']])
+        self.assertEqual(1,len(read(same)['basis']))  # words equal to the statement are its one exact source
+        self.assertEqual(('agent',{'host':'claude-code','session':'s-1','at':day},1),
+                         (read(agent)['decision']['stated_by'],read(agent)['decision']['source'],len(read(agent)['basis'])))
+    def test_a_decide_request_queued_by_0_10_0_drains_unchanged(self):
+        from ekk.adapters import activity_cli
+        statement=self.root/'decision.md';statement.write_text('Keep the queue.\n')
+        with patch('ekk.adapters.activity_cli.start_worker',return_value={'started':False,'test':True}):
+            code,queued=self.call(['decide','--root',str(self.realm),'--scope',self.scope,'--title','Queue stays','--result-file',str(statement),'--stated-by','agent'])
+        self.assertEqual(0,code,queued)
+        [request]=self.queued()  # an agent's decision without a host session: the request 0.10.0 queues and drains
+        self.assertEqual({'title':'Queue stays','body':'Keep the queue.\n','artifacts':[],'decision':{'schema':'ekk.decision/0.1','stated_by':'agent',
+                          'source':{'host':'unknown','at':request['request']['decision']['source']['at']}}},request['request'])
+        realm=self.app.codec.load_yaml(self.app.store.snapshot()['files']['.ekk/realm.yaml'])['id']
+        old={'title':'Queued by 0.10.0','body':'Keep the old queue.\n','artifacts':[],
+             'decision':{'schema':'ekk.decision/0.1','stated_by':'agent','source':{'host':'codex','at':'2026-10-09'}}}
+        store=activity_cli.local_store(self.app,realm)
+        try:
+            store.enqueue('decide-0-10-0',{**request,'request':old},[self.scope])
+            store.drain([self.scope],activity_cli.publish)
+            states={row['key']:row['state'] for row in store.status([self.scope])['operations']}
+        finally:store.close()
+        self.assertEqual({'read_back_and_discoverable'},set(states.values()),states)
+        records,_=self.records()
+        [metadata]=[row['metadata'] for row in records.values() if row['metadata']['title']=='Queued by 0.10.0']
+        self.assertEqual((old['decision'],1),(metadata['decision'],len(metadata['basis'])))
     def test_capture_without_key_derives_the_content_key(self):
         # The same bytes name the same key, so a retry publishes nothing new.
         code,first=self.call(['capture','--root',str(self.realm),'--scope',self.scope,'--wait'],{'body':'first'})
@@ -202,7 +312,7 @@ class CurrentCliTests(unittest.TestCase):
         code,error=self.call(['context','--root',str(self.realm),'--scope',self.scope],{'request_id':'bad-request','operation':'context','payload':{'budget':True}})
         self.assertEqual(code,2);self.assertEqual(error['schema'],'ekk.result/0.1')
         self.assertEqual(error['status'],'error');self.assertEqual(error['request_id'],'bad-request')
-        self.assertEqual(error['data']['error'],'invalid_format');self.assertTrue(error['incomplete'])
+        self.assertEqual((error['data']['error'],error['data']['option']),('invalid_request','budget'));self.assertTrue(error['incomplete'])
         code,plain=self.call(['context','--root',str(self.realm),'--scope',self.scope],{'task':'Example'})
         self.assertEqual(code,0);self.assertEqual(plain['schema'],'ekk.context/0.1');self.assertIn('index',plain)
 
@@ -226,7 +336,7 @@ class CurrentCliTests(unittest.TestCase):
     def test_transport_rejects_nonstandard_json_outside_budget(self):
         for value in (float('nan'),float('inf'),float('-inf')):
             code,result=self.call(['capture','--root',str(self.realm),'--scope',self.scope],{'body':value})
-            self.assertEqual(code,2);self.assertEqual(result['error'],'invalid_format')
+            self.assertEqual(code,2);self.assertEqual((result['error'],result['option']),('invalid_request','--stdin'))
             self.assertIn('Nonstandard JSON constant',result['message'])
 
     def test_common_init_forwards_only_supported_payload_and_checks_realm(self):
@@ -240,7 +350,7 @@ class CurrentCliTests(unittest.TestCase):
         self.assertEqual(manifest['owner'],self.app.principal)
         conflict={**request,'target_realm':'conflicting-realm','payload':{'realm_id':realm_id}}
         code,result=self.call(['init','--root',str(self.root/'conflict-init')],conflict)
-        self.assertEqual(code,2);self.assertEqual(result['data']['error'],'invalid_format')
+        self.assertEqual(code,2);self.assertEqual((result['data']['error'],result['data']['option']),('invalid_request','target_realm'))
         self.assertFalse((self.root/'conflict-init').exists())
 
     def test_capture_returns_exact_source_reference(self):
@@ -259,3 +369,170 @@ class CurrentCliTests(unittest.TestCase):
         self.assertEqual(code,0,result)
         self.assertEqual(result['schema'],'ekk.assurance/0.1')
         self.assertEqual(result['mutations'],0)
+
+class RequestErrorCliTests(unittest.TestCase):
+    """invalid_request: a request the caller can correct names its option; unknown IDs stay exact."""
+    setUp=CurrentCliTests.setUp
+    call=CurrentCliTests.call
+    def raw(self,args,text):
+        output=io.StringIO();error=io.StringIO()
+        with contextlib.redirect_stdout(output),contextlib.redirect_stderr(error),patch('sys.stdin',io.StringIO(text)):
+            code=main(args)
+        return code,json.loads(output.getvalue() or error.getvalue())
+    def note(self,identity,scope=None):
+        note=self.app._meta('note','Note '+identity,scope or [self.scope]);note['id']=identity
+        self.app.apply(self.app.propose({f'records/{identity}.md':self.app.codec.encode(note,'A note.')}),idempotency_key='note-'+identity)
+        return identity
+    def rows(self):
+        return [row for row in map(json.loads,(self.root/'data/operations/operations.jsonl').read_text().splitlines()) if 'attempt_id' in row]
+    def test_error_codes_put_a_correctable_request_first_and_keep_the_rest(self):
+        from ekk.adapters.command_line import error_code
+        from ekk.adapters.file_lock import LockBusy
+        from ekk.application.errors import RequestError
+        from ekk.model import Conflict, ValidationError
+        for message in ('x','Scope outside workspace binding','No profile named record-binding','unsupported value'):
+            self.assertEqual('invalid_request',error_code(RequestError(message)))  # whatever words a quoted value carries
+        self.assertEqual('invalid_format',error_code(ValueError('record bytes digest mismatch')))  # malformed records keep their code
+        self.assertEqual('invalid_format',error_code(ValidationError('title must be text')))
+        self.assertEqual(('lock_busy','access_denied','stale_snapshot','unresolved_binding'),
+                         (error_code(LockBusy('writer',30000)),error_code(PermissionError('x')),error_code(Conflict('x')),error_code(ValueError('Scope outside workspace binding'))))
+    def test_each_request_check_is_invalid_request_naming_its_option(self):
+        from ekk.adapters import activity_cli
+        from ekk.adapters.command_line import error_code, normalized_request
+        realm_id=self.app.codec.load_yaml(self.app.store.snapshot()['files']['.ekk/realm.yaml'])['id']
+        profiles=self.root/'config/profiles';profiles.mkdir(parents=True)
+        (profiles/'test.yaml').write_text(json.dumps({'schema':'ekk.profile/0.1','uid':os.getuid(),'realms':{'owned':{'id':realm_id,'path':str(self.realm)}}}))
+        cwd=self.root/'elsewhere';cwd.mkdir()
+        base=['--root',str(self.realm),'--scope',self.scope]
+        code,published=self.call(['retain',*base,'--title','Result','--wait','--idempotency-key','table'],{'body':'Local result.'})
+        self.assertEqual(code,0,published);record=published['result_reference']['id']
+        anyfile=self.root/'any.json';anyfile.write_text('{}');bad=self.root/'bad.json';bad.write_text('not json')
+        cases=[
+            (['retain',*base,'--title','T'],{'body':'x','artifacts':[{'body':'a','filename':f'{i}.txt'} for i in range(33)]},'artifacts'),
+            (['retain',*base,'--title','T'],{'body':' '},'body'),
+            (['retain',*base],{'body':'x'},'title'),
+            (['retain',*base,'--title','T'],{'body':'x','repository_evidence':'text'},'repository_evidence'),
+            (['retain',*base,'--title','T'],{'body':'x','artifacts':[{'x':1}]},'artifacts'),
+            (['capture',*base],{'body':''},'body'),
+            (['capture',*base],{'body':'x','title':''},'title'),
+            (['capture',*base],{'body':'x','filename':''},'filename'),
+            (['context',*base],{'request_id':'r','payload':[]},'payload'),
+            (['context',*base],{'request_id':'r','payload':{'operation':'fetch'}},'operation'),
+            (['context',*base],{'target_scope':[self.scope],'scopes':['other']},'target_scope'),
+            (['fetch',*base,'--manifest',str(anyfile)],None,'--manifest'),
+            (['retain',*base,'--manifest',str(anyfile),'--title','T'],None,'--manifest'),
+            (['context',*base,'--expected-head','a'*40],None,'--expected-head'),
+            (['context',*base,'--ground','x'],None,'--ground'),
+            (['context',*base,'--statement-file',str(anyfile)],None,'--statement-file'),
+            (['context',*base,'--personal'],None,'--personal'),
+            (['init','--workspace','--cwd',str(cwd)],None,'--realm'),
+            (['init','--workspace','--cwd',str(cwd),'--profile','test','--realm','owned','--scope',self.scope,'--scope',self.scope],None,'--scope'),
+            (['init','--cwd',str(cwd)],None,'--root'),
+            (['apply',*base],{'expected_snapshot':'a'*40,'proposal':{'base':'b'*40},'idempotency_key':'k'},'expected_snapshot'),
+            (['apply',*base],{'proposal':{}},'--idempotency-key'),
+            (['decide',*base,'--title','T'],{'body':'x','stated_by':'owner'},'stated_by'),
+            (['decide',*base,'--title','T'],{'body':'x'},'--stated-by'),
+            (['decide',*base,'--title','T'],{'body':'x','stated_by':'agent','statement_session':5},'statement_session'),
+            (['decide',*base,'--title','T'],{'body':'x','stated_by':'agent','owner_words':5},'owner_words'),
+            (['decide',*base,'--title','T','--stated-by','owner-relayed'],{'body':'x'},'--owner-words'),
+            (['propose',*base],{'changes':{'a.md':5}},'changes'),
+            (['backup','--profile','test','--realm','owned','--cwd',str(cwd)],None,'--destination'),
+            (['restore','--profile','test','--realm','owned','--cwd',str(cwd),'--destination',str(cwd/'copy')],None,'--file'),
+            (['context',*base],{'request_id':''},'request_id'),
+            (['context',*base],{'operation':'fetch'},'operation'),
+            (['enter',*base],{'personal':'yes'},'personal'),
+            (['enter',*base,'--resume','{}'],{'resume':{}},'--resume'),
+            (['enter',*base,'--resume','not json'],None,'--resume'),
+            (['enter',*base],{'personal':False,'scopes':['other']},'--scope'),
+            (['context',*base,'--json',str(anyfile)],{},'--stdin'),
+            (['context',*base,'--json',str(bad)],None,'--json'),
+            (['accept',*base,'--statement-file',str(bad)],None,'--statement-file'),
+            (['fetch',*base],None,'--id'),
+            (['fetch',*base,'--id',record],{'max_bytes':0},'max_bytes'),
+            (['fetch',*base,'--id',record],{'max_bytes':1},'max_bytes'),
+            (['context',*base],{'budget':True},'budget'),
+        ]
+        for args,body,option in cases:
+            with self.subTest(args=args,body=body):
+                code,result=self.call(args,body)
+                data=result.get('data',result) if result.get('schema')=='ekk.result/0.1' else result
+                self.assertEqual((code,data['error'],data.get('option')),(2,'invalid_request',option),result)
+        for text,option in (('not json','--stdin'),('[]','--stdin')):
+            code,result=self.raw(['context',*base,'--stdin'],text)
+            self.assertEqual((code,result['error'],result['option']),(2,'invalid_request',option),result)
+        with patch('ekk.adapters.operational_store.OperationalStore.enqueue',side_effect=ValueError('Outbox request exceeds 16 MiB')):
+            code,result=self.call(['retain',*base,'--title','T'],{'body':'x'})
+        self.assertEqual((code,result['error'],result['option']),(2,'invalid_request','--wait'),result)
+        route={'path':self.realm,'scopes':[self.scope],'alias':None}
+        with patch('ekk.adapters.command_line._routes',return_value=[route,dict(route)]):
+            code,result=self.call(['fetch',*base,'--id',record])
+        self.assertEqual((code,result['error'],result['option']),(2,'invalid_request','--realm'),result)
+        with self.assertRaises(ValueError) as raised:normalized_request({'operation':'fetch'},'context')
+        self.assertEqual(('invalid_request','operation'),(error_code(raised.exception),raised.exception.option))
+        # The legacy journal keeps 0.10.0's codes: every one of these is invalid_format at stage request.
+        self.assertEqual({('invalid_format','request')},{(row['error_code'],row['failure_stage']) for row in self.rows() if row['result']=='error'})
+        for argv,text,option in ((['list',*base,'--json',str(anyfile),'--stdin'],'{}','--stdin'),(['list',*base,'--stdin'],'[]','--stdin'),
+                                 (['list',*base,'--stdin'],'not json','--stdin'),(['list',*base,'--stdin','--key','a'],'{"key":"b"}','--key')):
+            error=io.StringIO()
+            with contextlib.redirect_stderr(error),contextlib.redirect_stdout(io.StringIO()),patch('sys.stdin',io.StringIO(text)):
+                self.assertEqual(2,activity_cli.main('task',argv))
+            self.assertEqual(('invalid_request',option),tuple(json.loads(error.getvalue())[k] for k in ('error','option')))
+    def test_an_unknown_id_names_the_full_id_only_for_a_unique_readable_prefix(self):
+        base=['--root',str(self.realm),'--scope',self.scope]
+        code,published=self.call(['retain',*base,'--title','Result','--wait','--idempotency-key','prefix'],{'body':'Local result.'})
+        self.assertEqual(code,0,published)
+        record=published['result_reference']['id']
+        argv=['fetch','--root',str(self.realm),'--scope',self.scope,'--id',record[:8]]
+        code,error=self.call(argv)
+        self.assertEqual(2,code,error)
+        self.assertEqual(('invalid_request','unknown_id','--id',[record]),(error['error'],error['refusal'],error['option'],error['record_ids']))
+        self.assertNotIn("'",error['message'])  # no KeyError quoting
+        self.assertIn(record,error['message'])
+        self.assertEqual('ekk '+shlex.join(argv[:-1]+[record]),error['next'])  # the same command with only the ID replaced
+        code,read=self.call(shlex.split(error['next'])[1:])
+        self.assertEqual((0,record),(code,read['reference']['id']),read)
+        code,wrapped=self.call(argv,{'request_id':'prefix','operation':'fetch'})
+        self.assertEqual((2,'unknown_id',[record]),(code,wrapped['data']['refusal'],wrapped['data']['record_ids']))
+        # read-source keeps its own command, and option=value is replaced in place.
+        code,captured=self.call(['capture',*base,'--wait','--idempotency-key','prefix-source'],{'body':'source bytes','title':'Source'})
+        source=captured['source_references'][0]['id']
+        argv=['read-source','--root',str(self.realm),'--scope',self.scope,'--id='+source[:12]]
+        code,error=self.call(argv)
+        self.assertEqual(('unknown_id',[source],'ekk '+shlex.join(argv[:-1]+['--id='+source])),(error['refusal'],error['record_ids'],error['next']))
+        code,read=self.call(shlex.split(error['next'])[1:])
+        self.assertEqual(0,code,read)
+        # Too short or matching nothing: the plain refusal.
+        for value in (record[:7],'nothing-starts-with-this'):
+            code,error=self.call(['fetch',*base,'--id',value])
+            self.assertEqual((2,'invalid_request','unknown_id',f'Record unavailable in selected contexts: {value}'),
+                             (code,error['error'],error['refusal'],error['message']))
+            self.assertNotIn('record_ids',error);self.assertNotIn('next',error)
+    def test_an_ambiguous_or_unreadable_prefix_names_no_id(self):
+        base=['--root',str(self.realm),'--scope',self.scope]
+        first,second=self.note('sharedpfx-one'),self.note('sharedpfx-two')
+        code,error=self.call(['fetch',*base,'--id','sharedpfx'])
+        self.assertEqual((2,'invalid_request','unknown_id'),(code,error['error'],error['refusal']))
+        self.assertIn('2 records',error['message'])
+        self.assertNotIn('record_ids',error);self.assertNotIn('next',error)
+        self.assertNotIn(first,json.dumps(error));self.assertNotIn(second,json.dumps(error))
+        # A record that also lies in a context not selected is never named, although it starts with the value.
+        private=self.app._meta('context','Private',['context:private'],context={'purpose':'Private','concepts':[],'relations':[],'basis':[]})
+        private['id']='context:private'
+        self.app.apply(self.app.propose({'contexts/context:private.md':self.app.codec.encode(private,'Private context.\n')}),idempotency_key='private-context')
+        hidden=self.note('hiddenpfx-spans-private',[self.scope,'context:private'])
+        code,error=self.call(['fetch',*base,'--id','hiddenpfx'])
+        self.assertEqual((2,'unknown_id'),(code,error['refusal']))
+        self.assertNotIn(hidden,json.dumps(error));self.assertNotIn('record_ids',error)
+        code,error=self.call(['fetch',*base,'--id',hidden])  # exact: refused by current access, as before
+        self.assertEqual((2,'access_denied'),(code,error['error']),error)
+    def test_decide_names_the_option_whose_id_is_unknown(self):
+        base=['--root',str(self.realm),'--scope',self.scope]
+        statement=self.root/'decision.md';statement.write_text('A decision.\n')
+        target=self.note('groundpfx-target')
+        for option in ('--supersedes','--ground'):
+            argv=['decide',*base,'--title','T','--result-file',str(statement),'--stated-by','agent',option,'groundpfx']
+            code,error=self.call(argv)
+            self.assertEqual((2,'invalid_request','unknown_id',option,[target]),(code,error['error'],error['refusal'],error['option'],error['record_ids']))
+            self.assertEqual('ekk '+shlex.join(argv[:-1]+[target]),error['next'])
+        argv=['decide',*base,'--title','T','--result-file',str(statement),'--stated-by','agent','--ground',target,'--ground=groundpfx']
+        self.assertEqual('ekk '+shlex.join(argv[:-1]+['--ground='+target]),self.call(argv)[1]['next'])

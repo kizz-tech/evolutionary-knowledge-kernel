@@ -21,8 +21,9 @@ PUBLISHED = json.dumps({'state': 'published', 'result_reference': {'id': RECORD}
 QUEUED = json.dumps({'schema': 'ekk.retention-queued/0.1', 'key': 'retain-abc', 'state': 'local_pending'}, indent=2)
 REALM = 'aaaaaaaa-2222-4333-8444-555555555555'
 SOURCE = 'bbbbbbbb-2222-4333-8444-555555555555'
-# Digest of the content of ekk.correction-rule/1 with ekk.field-use-collector/1.
+# Digests of the content of ekk.correction-rule/1 and /2 with ekk.field-use-collector/1.
 RULE_1_DIGEST = 'sha256:778dca9ee5793bc15d55d2fb9ac4727f740b8c538e9119da1eecfa7a9a6ebd82'
+RULE_2_DIGEST = 'sha256:7d992ea2114d2c38225daf7a1578039165cf4f8188ef95d71f372152fa342d12'
 
 
 def compact(value):
@@ -478,6 +479,120 @@ class FieldUseTest(unittest.TestCase):
             self.run_tool('--since', '2026-09-22', '--until', '2026-09-22', command='baseline')  # frozen
         outside = field_use.corrections(field_use.read_jsonl(self.out / 'messages.jsonl'), '2026-09-23', '2026-09-30')
         self.assertEqual(outside['total']['owner_messages'], 0)
+
+    def test_a_later_rule_counts_its_own_owner_turns_and_freezes_its_own_baseline(self):
+        self.assertEqual({name: field_use.rule_digest(rule) for name, rule in field_use.RULES.items()},
+                         {'ekk.correction-rule/1': RULE_1_DIGEST, 'ekk.correction-rule/2': RULE_2_DIGEST},
+                         'a correction rule content changed: bump its version and pin the new digest')
+        day = self.root / 'rules/sessions/2026/09/23'
+        day.mkdir(parents=True)
+        framed = ('<artifact-view-context artifact="a1">{"selected": ["' + 'x' * 600 + '"]}</artifact-view-context>'
+                  '\n\n\u0443\u0431\u0435\u0440\u0438 \u043b\u0438\u0448\u043d\u0435\u0435, \u0441\u043d\u043e\u0432\u0430')
+        lines = [
+            codex_line('session_meta', {'session_id': 'thread-3', 'id': 'thread-3', 'thread_source': 'user',
+                                        'cwd': str(self.project), 'timestamp': '2026-09-23T09:00:00Z'}),
+            owner('\u043f\u043e\u0434\u043d\u0438\u043c\u0438 \u043c\u0438\u043d\u0438\u043c\u0443\u043c \u0432\u044b\u043f\u043b\u0430\u0442\u044b', '2026-09-23T09:00:10Z'),
+            done('Raised it.', '2026-09-23T09:03:00Z'),
+            owner('<cross-session-message from="uds:/tmp/a.sock">FYI: committed again, \u043d\u0435 \u0442\u0430\u043a</cross-session-message>',
+                  '2026-09-23T09:04:00Z'),
+            owner('<send_user_message_question_reply> [{"answer": "\u043d\u0435\u0442"}] </send_user_message_question_reply>',
+                  '2026-09-23T09:05:00Z'),
+            owner(framed, '2026-09-23T09:06:00Z'),
+            owner('\u043e\u0431\u043d\u043e\u0432\u0438 \u0433\u0440\u0430\u0444\u0438\u043a\u0438, \u043e\u0442\u0432\u0435\u0442\u044b \u043d\u0435\u043c\u043d\u043e\u0433\u043e \u043f\u043e\u0437\u0436\u0435', '2026-09-23T09:07:00Z'),
+            owner('\u0437\u0430\u0447\u0435\u043c \u0434\u043e\u0431\u0430\u0432\u0438\u043b \u043c\u043e\u043a\u0438? \u044f \u0432\u0435\u0434\u044c \u0442\u0435\u0431\u0435 \u0437\u0430\u0440\u0430\u043d\u0435\u0435 \u043f\u0438\u0441\u0430\u043b', '2026-09-23T09:08:00Z'),
+        ]
+        (day / 'rollout-2026-09-23T09-00-00-thread-3.jsonl').write_text('\n'.join(lines) + '\n')
+        report = self.run_tool('--since', '2026-09-01', codex='rules/sessions/*/*/*/*.jsonl')
+        run = json.loads((self.out / 'run.json').read_text())
+        self.assertEqual((run['correction_rule_digest'], run['correction_rules']),
+                         (RULE_1_DIGEST, {'ekk.correction-rule/1': RULE_1_DIGEST, 'ekk.correction-rule/2': RULE_2_DIGEST}))
+        messages = field_use.read_jsonl(self.out / 'messages.jsonl')
+        self.assertEqual([(m['correction'], m['repeat'], m['rules']['ekk.correction-rule/2']) for m in messages], [
+            (False, False, {'owner': True, 'correction': False, 'repeat': False}),
+            (True, True, {'owner': False, 'correction': False, 'repeat': False}),
+            (False, False, {'owner': False, 'correction': False, 'repeat': False}),
+            (False, False, {'owner': True, 'correction': True, 'repeat': True}),
+            (True, False, {'owner': True, 'correction': False, 'repeat': False}),
+            (True, False, {'owner': True, 'correction': True, 'repeat': True})])
+        self.assertEqual(report['corrections']['total'], {'owner_messages': 6, 'owner_messages_after_report': 5,
+                                                          'corrections': 3, 'repeated_corrections': 1})
+        self.assertNotIn('\u043b\u0438\u0448\u043d\u0435\u0435', (self.out / 'messages.jsonl').read_text())
+
+        def freeze(rule):
+            self.run_tool('--since', '2026-09-01', '--until', '2026-09-30', '--rule', rule, command='baseline')
+        # Rule 2's owner turns come from rule 1, so a changed rule-1 digest refuses a rule-2 freeze too.
+        for unusable in ({**run, 'correction_rules': {**run['correction_rules'], 'ekk.correction-rule/2': 'sha256:other'}},
+                         {key: value for key, value in run.items() if key != 'correction_rules'},
+                         {**run, 'correction_rule_digest': 'sha256:other'}):
+            (self.out / 'run.json').write_text(json.dumps(unusable))
+            with self.assertRaises(SystemExit):
+                freeze('ekk.correction-rule/2')
+        (self.out / 'run.json').write_text(json.dumps(run))
+        with self.assertRaises(SystemExit):
+            freeze('ekk.correction-rule/9')
+        freeze('ekk.correction-rule/2')
+        freeze('ekk.correction-rule/1')
+        with self.assertRaises(SystemExit):
+            freeze('ekk.correction-rule/2')  # frozen
+        second = json.loads((self.out / 'corrections-baseline-correction-rule-2.json').read_text())
+        self.assertEqual((second['rule'], second['rule_digest'], second['owner_turn_rule'], second['owner_turn_rule_digest']),
+                         ('ekk.correction-rule/2', RULE_2_DIGEST, 'ekk.correction-rule/1', RULE_1_DIGEST))
+        self.assertEqual(second['total'], {'owner_messages': 4, 'owner_messages_after_report': 3,
+                                           'corrections': 2, 'repeated_corrections': 2})
+        first = json.loads((self.out / 'corrections-baseline.json').read_text())
+        self.assertEqual((first['rule'], first['rule_digest'], 'owner_turn_rule' in first),
+                         ('ekk.correction-rule/1', RULE_1_DIGEST, False))
+        self.assertEqual(first['total'], report['corrections']['total'])
+        self.assertEqual(oct((self.out / 'corrections-baseline-correction-rule-2.json').stat().st_mode & 0o777), '0o600')
+
+    def test_runs_collected_before_rule_2_still_report_and_freeze_under_their_own_rule(self):
+        logs = self.thread_logs()
+        self.run_tool('--since', '2026-09-01', codex=logs)
+        fresh = self.run_tool(codex=logs, command='report')['corrections']
+        run = json.loads((self.out / 'run.json').read_text())
+        rows = field_use.read_jsonl(self.out / 'messages.jsonl')
+        # The format written before rule 2: no per-rule flags in the rows, no digest map in run.json.
+        field_use.write_jsonl(self.out / 'messages.jsonl', [{k: v for k, v in m.items() if k != 'rules'} for m in rows])
+        (self.out / 'run.json').write_text(json.dumps({k: v for k, v in run.items() if k != 'correction_rules'}))
+        old = self.run_tool(codex=logs, command='report')['corrections']
+        self.assertEqual((old['rule'], old['total'], old['rule_matches_code']), (fresh['rule'], fresh['total'], True))
+        with self.assertRaises(SystemExit):
+            self.run_tool('--since', '2026-09-01', '--until', '2026-09-30', '--rule', 'ekk.correction-rule/2', command='baseline')
+        self.run_tool('--since', '2026-09-01', '--until', '2026-09-30', command='baseline')
+        frozen = json.loads((self.out / 'corrections-baseline.json').read_text())
+        self.assertEqual((frozen['rule'], frozen['total']), ('ekk.correction-rule/1', fresh['total']))
+        # A run that recorded another gating rule keeps its counts, labelled with that rule and marked not comparable.
+        (self.out / 'run.json').write_text(json.dumps({**run, 'correction_rule': 'ekk.correction-rule/0'}))
+        other = self.run_tool(codex=logs, command='report')['corrections']
+        self.assertEqual((other['rule'], other['total'], other['rule_matches_code']),
+                         ('ekk.correction-rule/0', fresh['total'], False))
+
+    def test_claude_turns_carry_rule_2_flags(self):
+        home = self.root / 'claude/rules'
+        home.mkdir(parents=True)
+        cwd = str(self.project)
+        framed = ('<artifact-view-context artifact="a1">{"selected": ["' + 'x' * 600 + '"]}</artifact-view-context>'
+                  '\n\n\u0443\u0431\u0435\u0440\u0438 \u043b\u0438\u0448\u043d\u0435\u0435, \u0441\u043d\u043e\u0432\u0430')
+        lines = [
+            claude('user', 'u1', '2026-09-24T10:00:00.000Z', '\u043f\u043e\u0434\u043d\u0438\u043c\u0438 \u043c\u0438\u043d\u0438\u043c\u0443\u043c \u0432\u044b\u043f\u043b\u0430\u0442\u044b', cwd=cwd),
+            claude('assistant', 'a1', '2026-09-24T10:01:00.000Z', [{'type': 'text', 'text': 'Raised it.'}], cwd=cwd, stop='end_turn'),
+            claude('user', 'u2', '2026-09-24T10:02:00.000Z', framed, cwd=cwd),
+            claude('user', 'u3', '2026-09-24T10:03:00.000Z',
+                   '<scheduled-task name="weekly" file="/tmp/SKILL.md">\u0410\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u0437\u0430\u043f\u0443\u0441\u043a: \u043f\u0440\u043e\u0432\u0435\u0440\u044c, \u043d\u0435 \u0442\u0430\u043a \u043b\u0438 \u0432\u0441\u0451.</scheduled-task>', cwd=cwd),
+            claude('user', 'u4', '2026-09-24T10:04:00.000Z', '\u043e\u0431\u043d\u043e\u0432\u0438 \u0433\u0440\u0430\u0444\u0438\u043a\u0438, \u043e\u0442\u0432\u0435\u0442\u044b \u043d\u0435\u043c\u043d\u043e\u0433\u043e \u043f\u043e\u0437\u0436\u0435', cwd=cwd),
+        ]
+        (home / 'cccc.jsonl').write_text('\n'.join(lines) + '\n')
+        self.run_tool('--since', '2026-09-01', codex='none/*.jsonl', claude='claude/rules/*.jsonl')
+        messages = field_use.read_jsonl(self.out / 'messages.jsonl')
+        self.assertEqual([(m['host'], m['correction'], m['rules']['ekk.correction-rule/2']) for m in messages], [
+            ('claude', False, {'owner': True, 'correction': False, 'repeat': False}),
+            ('claude', False, {'owner': True, 'correction': True, 'repeat': True}),
+            ('claude', True, {'owner': False, 'correction': False, 'repeat': False}),
+            ('claude', True, {'owner': True, 'correction': False, 'repeat': False})])
+        self.run_tool('--since', '2026-09-01', '--until', '2026-09-30', '--rule', 'ekk.correction-rule/2', command='baseline')
+        frozen = json.loads((self.out / 'corrections-baseline-correction-rule-2.json').read_text())
+        self.assertEqual(frozen['by_host']['claude'], {'owner_messages': 3, 'owner_messages_after_report': 2,
+                                                       'corrections': 1, 'repeated_corrections': 1})
 
     def test_claude_replays_changes_corrections_and_entry_use(self):
         home = self.root / 'claude/proj'

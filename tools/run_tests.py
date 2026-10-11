@@ -2,9 +2,9 @@
 """Run the EKK verification suite in parallel, isolated from the owner's EKK state.
 
 Each test module runs in its own process with temporary EKK homes and without
-the host markers that attribute callers (CODEX_HOME, CLAUDECODE), so a run never
-writes to the owner's operation journal and does not depend on the agent that
-starts it. The original starter tests, the historical replay, the method-transfer
+the host markers and session variables that attribute callers
+(host_identity.SCRUB_VARIABLES), so a run never writes to the owner's operation
+journal and does not depend on the agent that starts it. The original starter tests, the historical replay, the method-transfer
 harness and the field-use tests run alongside.
 
 Accepted failures, if any, are listed exactly. A run fails on any other failure
@@ -47,10 +47,9 @@ RAN = re.compile(r'^Ran (\d+) tests? in', re.M)
 
 
 def child_environment():
-    env = {k: v for k, v in os.environ.items() if not k.startswith('EKK_')}
-    for marker in ('CODEX_HOME', 'CLAUDECODE'):
-        env.pop(marker, None)
-    return env
+    sys.path.insert(0, str(ROOT / 'src'))
+    from ekk.adapters.host_identity import SCRUB_VARIABLES
+    return {k: v for k, v in os.environ.items() if not k.startswith('EKK_') and k not in SCRUB_VARIABLES}
 
 
 def run_job(name, argv, base_env, logs):

@@ -107,9 +107,11 @@ not themselves require a record. The parent
 integrator includes useful delegated findings in that result. If retention remains
 unresolved, report that specific limit; if there is no new material, no record is
 needed. There is no compulsory reflection and no transcript capture. On a host
-with EKK hooks, the final reports of a session that changed the repository, was
-corrected by the owner or produced a substantial result are recorded as one
-unaccepted outcome without any action by the agent; see the
+with EKK hooks, a final report attributed to a session that changed the project
+is recorded as one unaccepted outcome without any action by the agent. A
+substantial report without an attributed project change is held for owner review;
+use `retain` to preserve a significant no-file finding. Corrections are review
+candidates and do not themselves grant publication or become preferences; see the
 [agent contract](agent-contract.md).
 `retain` and `capture` are asynchronous by default: each queues the exact request
 durably, starts the background publisher and returns `state: local_pending` with a
@@ -122,9 +124,12 @@ an intention and `work show` to continue its exact version, results and limitati
 Use `retain` for an ordinary unaccepted outcome and its exact source artifacts;
 use `capture` for one original source. Use `decide` for a decision that should
 outlive the task: `ekk decide --cwd . --title '<decision>' --result-file FILE
-[--reason TEXT] [--revisit TEXT] [--ground ID]... [--supersedes ID]
-[--stated-by owner-relayed --statement-session ID]`. It queues like `retain`,
-preserves the statement as the decision's exact source, keeps the reason and
+--stated-by agent|owner-relayed [--owner-words FILE] [--reason TEXT]
+[--revisit TEXT] [--ground ID]... [--supersedes ID]`. `--stated-by` is required:
+`agent` for your own decision, `owner-relayed` with `--owner-words FILE` holding
+the owner's verbatim words, run from the host session in which the owner spoke.
+It queues like `retain`, preserves the statement (and the owner's words) as the
+decision's exact sources, keeps the reason and
 the revisit condition in the body and in the `decision` annotation, and may
 replace an earlier decision or outcome exactly. The record stays unaccepted
 until the owner accepts it, on the review page or with `accept` carrying the
@@ -132,7 +137,9 @@ owner's statement (see the [agent contract](agent-contract.md)).
 Preserve supplied bytes and distinguish them
 from the agent's derivative account. A result with no new source artifacts is valid.
 Use a stable idempotency key; without one, the exact content names the key, so the
-same bytes queued or published with `--wait` give one record. In the published
+same bytes queued or published with `--wait` give one record. A decision's content
+includes the host session and the UTC day it is recorded, so `decide` gives one
+record per session and day. In the published
 receipt (from `--wait` or `queue status`), check `retention.state`, exact `source_references`, `result_reference`,
 readback and discovery. Publication with
 pending verification must be reported as such. After an uncertain response, retry

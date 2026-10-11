@@ -1,4 +1,4 @@
-# Installing, upgrading and recovering EKK 0.9
+# Installing, upgrading and recovering EKK 0.10
 
 Install the reviewed wheel into a new Python environment and verify its published
 SHA-256 before changing the launcher. Keep the previous environment available
@@ -7,10 +7,10 @@ running writer. The CLI uses POSIX filesystem facilities; native Windows is not
 validated. Python 3.11 or later is required.
 
 ```sh
-python3 -m venv /absolute/path/to/ekk-0.9
-/absolute/path/to/ekk-0.9/bin/pip install /absolute/path/to/evolutionary_knowledge_kernel-0.9.1-py3-none-any.whl
-/absolute/path/to/ekk-0.9/bin/pip check
-/absolute/path/to/ekk-0.9/bin/ekk --version
+python3 -m venv /absolute/path/to/ekk-0.10
+/absolute/path/to/ekk-0.10/bin/pip install /absolute/path/to/evolutionary_knowledge_kernel-0.10.1-py3-none-any.whl
+/absolute/path/to/ekk-0.10/bin/pip check
+/absolute/path/to/ekk-0.10/bin/ekk --version
 ```
 
 A package update changes application code. It does not authorize changes to realm
@@ -108,6 +108,43 @@ needs a profile and a realm alias named `personal` in the local registry.
 realm's decision records as a table. `ekk observe install --host launchd`
 registers an optional hourly observer run (`ekk observe uninstall --host
 launchd` removes it); it reads the same private observer directory as the hooks.
+
+## 0.10.0: continuation and reading receipts
+
+0.10.0 adds commands (`work find`, `retain --manifest`, `guide show`) and exact
+opening receipts in the private observer state. Its loader fingerprint and store
+verifier equal those of 0.9.1, so neither 0.10.0 nor 0.10.1 rebuilds an index or
+audits a store after activation, and `warm` has nothing to do. The hooks
+registered for 0.9.0 keep working unchanged.
+
+## 0.10.1: declared provenance
+
+`ekk decide` now requires `--stated-by agent` or `--stated-by owner-relayed
+--owner-words FILE`; an owner-relayed decision is recorded from the host session
+in which the owner spoke, and `--statement-session` only cross-checks that
+session. `ekk observe prefer` changes the same way: 0.9.1 recorded the session
+named by `--statement-session`, while 0.10.1 records the host session the command
+runs in, refuses a `--statement-session` that differs from it
+(`session_mismatch`), and refuses `--stated-by owner-relayed` without a host
+session (`session_identity_missing`). `ekk observe apply-review` requires `--owner-marked-page` or `--relayed
+--words REPLY`; a page written by 0.10.0 applies unchanged with either. The
+refusals name the corrected command. A page written by 0.10.1 names both forms,
+which 0.10.0 does not parse: after a rollback, apply it with plain
+`ekk observe apply-review FILE`.
+
+`ekk accept --id ID --words FILE` accepts a current decision with the owner's
+words from the host session and the runtime clock; `--statement-file` keeps
+working. Request errors return `invalid_request` and name the failing option.
+
+The private observer state gains a schema version and runtime stamps on first
+use; the columns are additive, and a frozen copy of the 0.10.0 store code keeps
+reading and writing the migrated state in the tests.
+Held results, composed results and pending corrections now expire explicitly
+(60 and 90 days, with counts in `ekk observe status`) instead of being deleted
+after 30 days. A runtime before 0.10.1 would delete them silently, so
+`tools/local_install.py rollback` and `activate` refuse a switch to such a
+runtime while the observer holds rows it would delete, unless
+`--accept-observer-loss` is given.
 
 See [release validation](release-validation.md) for the exact versions and checks
 actually exercised. Mechanism tests do not establish external outcomes or benefit.

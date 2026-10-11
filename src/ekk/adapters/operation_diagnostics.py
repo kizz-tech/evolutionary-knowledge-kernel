@@ -3,68 +3,49 @@ from __future__ import annotations
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 import hashlib
-import os
-from pathlib import Path
-import re
 
-from .local_profile import config_home, data_home, read_yaml, trusted_principal
+from .host_identity import load_registry, resolve
+from .local_profile import data_home, trusted_principal
 from .operation_journal import OperationJournal, TrustedCallerProfile
 
 _ACTIVE = ContextVar('ekk_operation_diagnostic', default=None)
-_ENVIRONMENT_NAME = re.compile(r'[A-Za-z_][A-Za-z0-9_]{0,63}\Z')
 _WARNING = 'Operation diagnostics are incomplete; the returned application result remains authoritative.'
 
 
 def trusted_caller(profile_id=None):
-    """Resolve host registration, never a role, request label or authentication."""
-    path = config_home() / 'callers.yaml'
-    if not path.exists():
-        return None
-    info = path.stat()
-    if info.st_uid != os.getuid() or info.st_mode & 0o077 or info.st_size > 65536:
-        raise PermissionError('Caller configuration must be private to the OS owner')
-    config = read_yaml(path)
-    if not isinstance(config, dict) or config.get('schema') != 'ekk.callers/0.1':
-        raise ValueError('Unknown caller configuration')
-    adapters = config.get('adapters', [])
-    if not isinstance(adapters, list) or any(not isinstance(item, str) for item in adapters):
-        raise ValueError('Caller adapters must be registered identifiers')
-    for item in adapters: TrustedCallerProfile(item)
-    environments = config.get('environments', {})
-    if not isinstance(environments, dict) or any(
-            not isinstance(markers, dict) or not markers or any(
-                not isinstance(name, str) or not _ENVIRONMENT_NAME.fullmatch(name)
-                or not isinstance(value, str) or not 0 < len(value) <= 256
-                for name, value in markers.items())
-            for markers in environments.values()):
-        raise ValueError('Caller environments must map registered identifiers to environment markers')
-    for item in environments: TrustedCallerProfile(item)
+    """Resolve host registration, never a role, request label or authentication.
+
+    The same resolution as the observer and the CLI (host_identity), strict: a
+    registry that cannot be read raises, and the observation boundary reports it.
+    """
     if profile_id is not None:
-        return TrustedCallerProfile(profile_id) if profile_id in adapters else None
-    home = os.environ.get('CODEX_HOME')
-    if not home:
-        # Other coding agents are recognised by markers their host sets for every
-        # command. Several matches stay unknown rather than guessing.
-        matches = [item for item, markers in environments.items()
-                   if all(os.environ.get(name) == value for name, value in markers.items())]
-        return TrustedCallerProfile(matches[0]) if len(matches) == 1 else None
-    fleet_path = config.get('codex_profile_fleet')
-    if not fleet_path:
-        return None
-    fleet = read_yaml(Path(fleet_path).expanduser())
-    if not isinstance(fleet, dict) or fleet.get('schema_version') != 'lifeos.codex-profile-fleet/1' or not isinstance(fleet.get('profiles'), dict):
-        raise ValueError('Unknown caller fleet registry')
-    actual = Path(home).expanduser().resolve()
-    matches = [key for key, row in fleet.get('profiles', {}).items()
-               if isinstance(row, dict) and row.get('home')
-               and Path(row['home']).expanduser().resolve() == actual]
-    if len(matches) != 1:
-        return None
-    return TrustedCallerProfile(matches[0])
+        registry = load_registry()
+        return TrustedCallerProfile(profile_id) if registry is not None and profile_id in registry.adapters else None
+    caller = resolve(strict=True).caller
+    return TrustedCallerProfile(caller) if caller else None
+
+
+def declared_caller(caller):
+    """The caller a host declares, as the journal attributes it: a registered adapter,
+    environment or Codex fleet key, else None. Never inferred from the environment;
+    a registry that cannot be read raises, as for trusted_caller.
+    """
+    registry = load_registry()
+    return TrustedCallerProfile(caller) if registry is not None and registry.registered(caller) else None
 
 
 def journal():
     return OperationJournal(data_home().expanduser().resolve() / 'operations')
+
+
+def legacy_failure(error_code, failure_stage):
+    """(error code, stage) as the legacy journal ``ekk.operation-attempt/0.1`` records them.
+
+    Its readers in 0.10.0 and in the gateway's 0.8.0 count an unknown code as damage,
+    so a request error stays ``invalid_format``, told apart by the stage ``request``,
+    until journal v2 records ``invalid_request`` itself.
+    """
+    return ('invalid_format', 'request') if error_code == 'invalid_request' else (error_code, failure_stage)
 
 
 @dataclass
@@ -158,11 +139,12 @@ def observed_call(operation, callback, *, realm_id=None, principal=None, key=Non
             from ..model import Conflict
             from .command_line import error_code
             status = 'cancelled' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'conflict' if isinstance(exc, Conflict) else 'error'
+            code, stage = legacy_failure('cancelled' if status == 'cancelled' else error_code(exc), active.failure_stage)
             if active.attempt:
                 active.safe(lambda: active.journal.finish(active.attempt, result=status,
-                    failure_stage=active.failure_stage,
+                    failure_stage=stage,
                     mutated=active.mutated, replayed=active.replayed,
-                    error_code='cancelled' if status == 'cancelled' else error_code(exc),
+                    error_code=code,
                     final_snapshot=active.final_snapshot))
             # A safe annotation allows the CLI to report incomplete diagnostics.
             if active.warnings:
@@ -175,11 +157,11 @@ def observed_call(operation, callback, *, realm_id=None, principal=None, key=Non
         data = result.get('data', result) if isinstance(result, dict) else {}
         pending = isinstance(data, dict) and data.get('retention', {}).get('state') == 'published_verification_pending'
         status = 'error' if pending else 'unbound' if isinstance(result, dict) and result.get('status') == 'unbound' else 'blocked' if _failed(result) or isinstance(result, dict) and result.get('status') == 'blocked' else 'completed'
+        code, stage = legacy_failure(data['retention'].get('error_code', 'source_unavailable'), 'response') if pending else (None, None)
         if active.attempt:
             active.safe(lambda: active.journal.finish(active.attempt, result=status,
                 mutated=active.mutated, replayed=active.replayed,
-                failure_stage='response' if pending else None,
-                error_code=data['retention'].get('error_code', 'source_unavailable') if pending else None,
+                failure_stage=stage, error_code=code,
                 final_snapshot=active.final_snapshot))
         if isinstance(result, dict) and active.warnings:
             result.setdefault('warnings', []).extend(active.warnings)

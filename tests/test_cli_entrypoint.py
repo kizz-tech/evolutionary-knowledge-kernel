@@ -7,13 +7,15 @@ import sys
 import tempfile
 import unittest
 
+from ekk.adapters.host_identity import SCRUB_VARIABLES
+
 
 class EntrypointTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name).resolve()
-        self.env = {k: v for k, v in os.environ.items() if not k.startswith('EKK_')}
+        self.env = {k: v for k, v in os.environ.items() if not k.startswith('EKK_') and k not in SCRUB_VARIABLES}
         self.env.update(EKK_CONFIG=str(self.root / 'no-legacy-config'),
                         EKK_CONFIG_HOME=str(self.root / 'config'),
                         EKK_DATA_HOME=str(self.root / 'data'),
@@ -33,7 +35,7 @@ class EntrypointTests(unittest.TestCase):
             self.assertNotIn('project-bind', result.stdout)
         result = self.call('--version')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('0.9.1', result.stdout)
+        self.assertIn('0.10.1', result.stdout)
         self.assertIn('record format 0.1', result.stdout)
 
     def test_unbound_entry_creates_only_private_diagnostics_without_knowledge_state(self):

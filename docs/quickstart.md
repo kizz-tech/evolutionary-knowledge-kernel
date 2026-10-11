@@ -2,7 +2,8 @@
 
 For result retention, explicit challenges, current file evidence and owner recovery, see [daily reliability](daily-reliability.md).
 
-Runtime 0.7 is the current checkout. Python 3.11+ and Git are required. Install
+This checkout is the current runtime (its version is in `pyproject.toml`). Python
+3.11+ and Git are required. Install
 locally and run the complete disposable method example:
 
 ```sh

@@ -1,5 +1,5 @@
 {
-  "edition": "0.9.1",
+  "edition": "0.10.1",
   "files": [
     {
       "method": "reused_verified_english",
@@ -149,11 +149,11 @@
       "sha256": "3a579a9fe74580881d24632de93911e94e048f6ca5cc809ea70ca6ae40cba717"
     },
     {
-      "method": "reused_verified_english",
+      "method": "explicit_translation",
       "original_path": "docs/interfaces.ru.md",
-      "original_sha256": "f9438df2b0ec465994d6c886049afd103984ef21bbba6ae83fb8297f63915956",
+      "original_sha256": "f27d9f2eb99f06f55f03ffa9b2c279cddd4e034466fbb6538a8c2613e24b64a9",
       "path": "docs/interfaces.md",
-      "sha256": "1d1c7019a03128cade2afc86cb4fe0de327eee908fa675558449b337663b9e8c"
+      "sha256": "d0dbff594cf3e997f919531b66a0e6352f87ab9c5af918a6bd89f345d09d6c05"
     },
     {
       "method": "reused_verified_english",
@@ -725,9 +725,9 @@
     {
       "method": "explicit_translation",
       "original_path": "src/ekk/observation.py",
-      "original_sha256": "d86b6335de2130d28abce554f8c20705955b5d9cdc9c285c96b48bc8c47b7dc8",
+      "original_sha256": "2a098de515680e5994523f0ef935f41ab7ee169c1b0ee0058be6140703481f09",
       "path": "src/ekk/observation.py",
-      "sha256": "d18ce0efefcc9e86fcfd5cef0da14e856cbd2e632d43577793dc0ea2e9414d74"
+      "sha256": "ff530d90ec484f60277711585c9692fdd67f64f2341398df65eaf5c6dc7e9749"
     },
     {
       "method": "reused_verified_english",
@@ -737,6 +737,13 @@
       "sha256": "661cfcd63a74d8c44038382655bfcf02e9634081878ffb249bcb07c80430a366"
     },
     {
+      "method": "unicode_escape_identical_ast",
+      "original_path": "tests/test_architecture_cli.py",
+      "original_sha256": "356e6f7c104add47f002c3e806b768230648bf5d59fb6c972a688dbfa8c766d6",
+      "path": "tests/test_architecture_cli.py",
+      "sha256": "0b9f2973f54b916ad2653100a486fcb1b221b0c726de01aabca987c4ddb106b8"
+    },
+    {
       "method": "reused_verified_english",
       "original_path": "tests/test_architecture_store.py",
       "original_sha256": "96c8d3de5f5a0d07b02eba40962216acf7933ab76c8c666f045db6c6fa240eae",
@@ -744,7 +751,7 @@
       "sha256": "6459fd9f9d3055688946fc992d13b9f7df40a465dcde5edb9eefa2a837b97282"
     },
     {
-      "method": "unicode_escape_identical_ast",
+      "method": "reused_verified_english",
       "original_path": "tests/test_context_continuity.py",
       "original_sha256": "428754dd0018ee2b21acc5212b711c373a6424dca97bcac68d2af149f7390005",
       "path": "tests/test_context_continuity.py",
@@ -758,25 +765,46 @@
       "sha256": "6bd39d1be44d953a95430f5f2521d67d68369759d4d92ff2faa62875e1944135"
     },
     {
-      "method": "reused_verified_english",
+      "method": "unicode_escape_identical_ast",
       "original_path": "tests/test_observation.py",
-      "original_sha256": "1fca1250a54c09d72600ebe2445e3c19ecc9853332f14931a8f6d8cba0700540",
+      "original_sha256": "b25ab1b570bbf049597db95751345a5a358e6fc0ae71b439b7fad3ab3318b5e7",
       "path": "tests/test_observation.py",
-      "sha256": "b95073befd8326a9008dc372b3d867970be611bd0744d978791d1d02e217193a"
+      "sha256": "74224d0bb7b56be522d81c2dec4f19ecbe6d2bd155564af47be35a392e4c47a6"
     },
     {
       "method": "unicode_escape_identical_ast",
       "original_path": "tests/test_experience.py",
-      "original_sha256": "d32ecca509b043226aa6d56d5a22328abf5d09a9bd6498a9eeb585679b04ee86",
+      "original_sha256": "83874cdfb190de13b183070bd9054da7f7d483fc644be750d7a6b9e8d3824b34",
       "path": "tests/test_experience.py",
-      "sha256": "9c0cfa78e993daa635356edd0ff6e130ae51053403fd0c2b35b13abbbaebf767"
+      "sha256": "068cae7d8ff3398ec9cbdcf567587b0efb18ad04942d43ca8d50c8b8bd374954"
     },
     {
-      "method": "reused_verified_english",
+      "method": "unicode_escape_identical_ast",
+      "original_path": "tests/test_result_manifest.py",
+      "original_sha256": "312ce4f690605d8b99f745924fe80d18fdfdf84c95eb600ec22b3ef10fbb8f58",
+      "path": "tests/test_result_manifest.py",
+      "sha256": "5dd1ab1ef7daaaedee3996684c21f25b3f9a6d6d62831d8c494616d5d5f01fa5"
+    },
+    {
+      "method": "explicit_translation",
+      "original_path": "docs/releases/1.0/decisions.md",
+      "original_sha256": "29581d3763a5ea93799af399d8ed481143883f848070416044e49d2def61286c",
+      "path": "docs/releases/1.0/decisions.md",
+      "sha256": "236478635f5ba35a3887ff53d59b95fde1a3ee14554a4875f668e5d8d2a4a3ae"
+    },
+    {
+      "method": "unicode_escape_identical_ast",
       "original_path": "research/studies/field-use/test_field_use.py",
-      "original_sha256": "ac26efb8631dbedc668b2a04798cd41a81ee1723324a861cbed05a1ad8a6ff6f",
+      "original_sha256": "8449fbf40dec2994099e42f8149e39c254c3303ecb6f1bef6058249907f7e923",
       "path": "research/studies/field-use/test_field_use.py",
-      "sha256": "983e27b73f10c611846fd3acf473a326503dd8d7ef0e223a378bb11ab5ccd1b2"
+      "sha256": "3277cf47af089ad7087723b6bcd0e52aca34b64e85acebbd22862c23c49c1a8a"
+    },
+    {
+      "method": "unicode_escape_identical_ast",
+      "original_path": "tests/test_accept_by_id.py",
+      "original_sha256": "8551da5cb3428c493f14f42fbf7f6a64156b8656aebf9369963a616c237a1736",
+      "path": "tests/test_accept_by_id.py",
+      "sha256": "b974acdc5e1dc710bd1305b6f35ff75d9390ebcac37d83e987d4b4ad94b46a90"
     }
   ],
   "language": "en",

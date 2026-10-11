@@ -7,9 +7,24 @@ import unittest
 from unittest.mock import patch
 
 from ekk.adapters.command_line import dispatch, parser, service
-from ekk.adapters.operation_diagnostics import observed_call, trusted_caller
+from ekk.adapters.host_identity import SCRUB_VARIABLES
+from ekk.adapters import operation_journal
+from ekk.adapters.operation_diagnostics import journal, observed_call, trusted_caller
 from ekk.adapters.operation_journal import OperationJournal
 from ekk.model import Conflict
+
+# The legacy journal reader of 0.10.0 (operation_journal.py at c1b132a) and of the 0.8.0 gateway counts a row with
+# any other key or error code as damage and then refuses every later begin. Frozen literals, never imported.
+JOURNAL_0_10_0 = {
+    'ERROR_CODES': frozenset({'access_denied', 'recovery_required', 'stale_snapshot', 'source_unavailable',
+                              'unsupported_capability', 'unresolved_binding', 'invalid_format', 'cancelled',
+                              'internal_error', 'dirty_working_tree', 'idempotency_conflict', 'lock_busy'}),
+    '_RECORD_KEYS': frozenset({'schema', 'attempt_id', 'logical_id', 'parent_attempt_id', 'operation', 'realm_digest',
+                               'principal_digest', 'keyed', 'caller_profile', 'caller_provenance', 'started_at', 'finished_at',
+                               'duration_ms', 'result', 'replayed', 'mutated', 'failure_stage', 'attempted_base',
+                               'current_snapshot', 'final_snapshot', 'clock_regressed'}),
+    '_OPTIONAL_RECORD_KEYS': frozenset({'runtime_version', 'error_code'}),
+}
 
 
 class DiagnosticIntegrationTests(unittest.TestCase):
@@ -20,7 +35,7 @@ class DiagnosticIntegrationTests(unittest.TestCase):
             'EKK_CONFIG_HOME': str(self.root/'config'), 'EKK_CACHE_HOME': str(self.root/'cache')})
         env.start(); self.addCleanup(env.stop)
         # The suite itself runs inside coding agents; attribution must not depend on that.
-        for marker in ('CODEX_HOME', 'CLAUDECODE'): os.environ.pop(marker, None)
+        for name in SCRUB_VARIABLES: os.environ.pop(name, None)
         self.config = self.root/'config'; self.config.mkdir(mode=0o700)
 
     def call(self, op, request=None, *, render=None, **options):
@@ -78,6 +93,61 @@ class DiagnosticIntegrationTests(unittest.TestCase):
                     {'unknown':{'CLAUDECODE':'1'}}, ['claude-code']):
             path.write_text(json.dumps({**config, 'environments':bad}))
             with self.assertRaises(ValueError): trusted_caller()
+
+    def test_a_malformed_sessions_override_never_drops_a_journal_row(self):
+        fleet = {'schema_version':'lifeos.codex-profile-fleet/1', 'profiles': {'alpha':{'home':str(self.root/'alpha')}}}
+        (self.root/'fleet.json').write_text(json.dumps(fleet))
+        path = self.config/'callers.yaml'
+        for sessions in ('CODEX_THREAD_ID', {'codex':'CODEX_THREAD_ID'}, {'codex':['bad name']}, {'claude-code':[None]}):
+            path.write_text(json.dumps({'schema':'ekk.callers/0.1', 'codex_profile_fleet': str(self.root/'fleet.json'),
+                                        'environments':{'claude-code':{'CLAUDECODE':'1'}}, 'sessions':sessions})); path.chmod(0o600)
+            with patch.dict(os.environ, {'CODEX_HOME':str(self.root/'alpha'), 'CODEX_THREAD_ID':'thread'}):
+                self.assertNotIn('warnings', observed_call('context', lambda:{'ok':True}))
+            with patch.dict(os.environ, {'CLAUDECODE':'1', 'CLAUDE_CODE_SESSION_ID':'claude'}):
+                self.assertNotIn('warnings', observed_call('context', lambda:{'ok':True}))
+        self.assertEqual(['alpha', 'claude-code'] * 4, [row['caller_profile'] for row in self.rows()])
+
+    def test_rows_this_runtime_writes_pass_the_0_10_0_journal_reader(self):
+        fleet = {'schema_version':'lifeos.codex-profile-fleet/1', 'profiles': {'alpha':{'home':str(self.root/'alpha')}}}
+        (self.root/'fleet.json').write_text(json.dumps(fleet))
+        path = self.config/'callers.yaml'
+        path.write_text(json.dumps({'schema':'ekk.callers/0.1', 'codex_profile_fleet': str(self.root/'fleet.json'),
+                                    'adapters':['private-gateway'], 'environments':{'claude-code':{'CLAUDECODE':'1'}},
+                                    'sessions':{'claude-code':['CLAUDE_CODE_SESSION_ID']}})); path.chmod(0o600)
+        with patch.dict(os.environ, {'CODEX_HOME':str(self.root/'alpha'), 'CLAUDECODE':'1', 'CODEX_THREAD_ID':'thread'}):
+            self.call('init', {'context_id':'scope'})
+        with patch.dict(os.environ, {'CLAUDECODE':'1', 'CLAUDE_CODE_SESSION_ID':'claude'}):
+            with self.assertRaises(ValueError): self.call('capture', {'body':'', 'title':''})
+            self.call('context')
+        observed_call('context', lambda:{'ok':True}, caller=trusted_caller('private-gateway'))
+        self.call('decide', {'title':'Use exact IDs', 'body':'Exact IDs only.', 'stated_by':'agent'})
+        rows = self.rows()
+        self.assertEqual({'alpha', 'claude-code', 'private-gateway', 'unknown'}, {row['caller_profile'] for row in rows})
+        self.assertIn('invalid_format', {row['error_code'] for row in rows})
+        with patch.multiple(operation_journal, **JOURNAL_0_10_0):
+            for row in rows:
+                OperationJournal._validate_record(row)
+            self.assertIsNotNone(journal().begin('context', principal='local:uid:0'))
+
+    def test_a_cli_request_error_keeps_the_0_10_0_journal_readable(self):
+        import contextlib, io
+        from ekk.adapters.command_line import main
+        from ekk.adapters.operation_diagnostics import legacy_failure
+        self.call('init', {'context_id':'scope'})
+        error = io.StringIO()
+        with contextlib.redirect_stderr(error), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(2, main(['fetch','--root',str(self.root/'realm'),'--scope','scope','--id','nothing-has-this-id']))
+        self.assertEqual(('invalid_request', 'unknown_id'), tuple(json.loads(error.getvalue())[k] for k in ('error', 'refusal')))  # what the agent sees
+        [row] = [row for row in self.rows() if row['result'] == 'error']
+        self.assertEqual(('invalid_format', 'request'), (row['error_code'], row['failure_stage']))  # what older readers accept
+        with patch.multiple(operation_journal, **JOURNAL_0_10_0):
+            report = journal().report()
+            self.assertEqual((True, 0), (report['coverage']['metadata_integrity_verified'], report['coverage']['damaged_records']))
+            self.assertNotIn('damaged_metadata', report['coverage']['limitations'])
+            self.assertIsNotNone(journal().begin('context', principal='local:uid:0'))
+        # The retention-pending path forwards a code it did not choose: the same mapping applies.
+        self.assertEqual([('invalid_format', 'request'), ('source_unavailable', 'response')],
+                         [legacy_failure(code, 'response') for code in ('invalid_request', 'source_unavailable')])
 
     def test_bad_caller_configuration_warns_without_preventing_domain_work(self):
         path = self.config/'callers.yaml'; path.write_text('null\n'); path.chmod(0o600)

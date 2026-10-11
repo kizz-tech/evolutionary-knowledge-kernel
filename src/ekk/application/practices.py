@@ -31,8 +31,47 @@ PRACTICES={
   'skip_when':'The request is complete in this conversation and creates no durable commitment.'}}
 
 
-def practice(domain, request=None):
+# Phases are optional decisions within any domain, not a required sequence.
+# Keep PRACTICES unchanged: its exact bytes identify existing method artifacts.
+PHASES={
+ 'research':{
+  'decision':'What information would change the current question or next action?',
+  'output':'Supported findings, unresolved claims and the next useful decision.',
+  'experience_use':['Check relevant prior investigations and their exact grounds.',
+                    'Recheck changed conditions; use real materials for the present question.'],
+  'evidence':['Source provenance and currency','Direct observations separated from interpretation'],
+  'stop_when':['Evidence suffices for the current decision, with uncertainty explicit.',
+               'Further research would not change the next action.']},
+ 'design':{
+  'decision':'Which design delivers the required ability within current constraints?',
+  'output':'A usable target, credible alternatives, tradeoffs and material limits.',
+  'experience_use':['Use earlier successes, friction and counterexamples when conditions still apply.',
+                    'Check how the user will reach and use the result, not only its internal mechanism.'],
+  'evidence':['Required user ability and actual entry point','Grounds for alternatives and constraints'],
+  'stop_when':['The target and its limits are clear enough to implement or choose.',
+               'A consequential unresolved choice needs owner input.']},
+ 'planning':{
+  'decision':'What is the next complete authorized step from the actual current state?',
+  'output':'The next useful step, dependencies, scope and completion or stopping conditions.',
+  'experience_use':['Read actual completion receipts before treating old plans as unfinished work.',
+                    'Use prior delays and recovery outcomes to identify applicable dependencies.'],
+  'evidence':['Current scope and authority','Verified completed work and unresolved dependencies'],
+  'stop_when':['The next step is actionable and proportionate to the task.',
+               'An external dependency or missing authority prevents the next action.']},
+ 'implementation':{
+  'decision':'Does the authorized result work through its real entry point?',
+  'output':'A completed usable flow, observed result and explicit residual unknowns.',
+  'experience_use':['Apply relevant prior lessons and preserve critical successful behavior.',
+                    'Identify the changed decision and the actual result in the ordinary final report.'],
+  'evidence':['Observed result through the actual user flow','Mechanism checks reported separately from real use',
+              'Exact grounds for a reused lesson and remaining unknowns'],
+  'stop_when':['The requested flow is delivered with applicable checks and material limits reported.',
+               'A real blocker requires owner input or an external change.']}}
+
+
+def practice(domain, request=None, *, phase=None):
     if domain not in PRACTICES:raise ValueError('Choose software, research or personal')
+    if phase is not None and phase not in PHASES:raise ValueError('Choose research, design, planning or implementation')
     request={} if request is None else request
     if not isinstance(request,dict) or set(request)-{'intention','context_sufficient','local_edit','unknowns','current_stage'}:raise ValueError('Unsupported practice input')
     for flag in ('context_sufficient','local_edit'):
@@ -42,7 +81,10 @@ def practice(domain, request=None):
     unknowns=request.get('unknowns',[])
     if not isinstance(unknowns,list) or len(unknowns)>32 or any(not isinstance(v,str) or len(v)>2000 for v in unknowns):raise ValueError('Bounded unknowns required')
     direct=request.get('local_edit',False) and request.get('context_sufficient',False) and not unknowns
-    return {'schema':'ekk.practice/0.1','domain':domain,**deepcopy(PRACTICES[domain]),
+    result={'schema':'ekk.practice/0.1','domain':domain,**deepcopy(PRACTICES[domain]),
             'route':'direct_local_work' if direct else 'targeted_context_if_needed',
             'ekk_calls_required':0,'retention_required':False,'pipeline_required':False,
             'observed_benefit':'unknown','authority':'Optional guidance. Existing project rules and current user authority apply.'}
+    if phase is not None:
+        result.update(phase=phase,phase_guidance=deepcopy(PHASES[phase]))
+    return result

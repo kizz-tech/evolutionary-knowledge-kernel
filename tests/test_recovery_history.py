@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 from ekk.adapters.contained_store import ContainedGitStore
 from ekk.adapters.git_store import GitStore
+from ekk.adapters.host_identity import SCRUB_VARIABLES
 from ekk.model import DirtyWorkingTree, RecoveryConflict
 
 
@@ -87,7 +88,7 @@ class ScheduledAuditTests(unittest.TestCase):
         env = patch.dict(os.environ, {'EKK_DATA_HOME': str(self.root/'data'), 'EKK_CONFIG_HOME': str(self.root/'config'),
                                       'EKK_CACHE_HOME': str(self.root/'cache')})
         env.start(); self.addCleanup(env.stop)
-        for marker in ('CODEX_HOME', 'CLAUDECODE'): os.environ.pop(marker, None)
+        for name in SCRUB_VARIABLES: os.environ.pop(name, None)
         from ekk.adapters.command_line import main, service
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(0, main(['init', '--root', str(self.realm), '--title', 'Example']))

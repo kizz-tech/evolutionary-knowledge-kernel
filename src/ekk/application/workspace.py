@@ -33,6 +33,21 @@ def working_references(values, realm_id):
     return result
 
 
+def work_navigation(reference, current_reference=None, *, historical=False):
+    """Exact selected reading and separately labelled current reading."""
+    ref = exact_reference(reference)
+    result = {'selected': {'reference': ref},
+              'status_provenance': 'selected_historical_revision' if historical else 'selected_current_revision'}
+    if current_reference is not None:
+        current = exact_reference(current_reference)
+        result['current'] = {'reference': current}
+    if historical:
+        result['warning'] = 'Displayed work status and next_step belong to the selected historical revision.'
+        if current_reference is None:
+            result['current_unavailable'] = True
+    return result
+
+
 class WorkspaceService:
     def __init__(self, resolver):
         self.resolver = resolver
@@ -89,7 +104,10 @@ def work_view(context, method_availability=None):
             'visible_results': [anchor(r) for r in rows if r['metadata']['kind'] in ('outcome', 'observation')],
             'work_items': [{**anchor(r), **{key:value for key,value in r['metadata']['work'].items()
                 if key in ('intention','direction','next_step','questions','status','domain','external')},
-                'events_read':'use work show with the exact reference'}
+                'events_read':'use work show with the exact reference',
+                'historical':bool(r.get('historical')),
+                'navigation':work_navigation(anchor(r)['reference'], r.get('current_reference'),
+                    historical=bool(r.get('historical')))}
                 for r in rows if r['metadata'].get('work',{}).get('schema')=='ekk.work/0.1'],
             'method_offers': offers,
             'challenges': context.get('insights', {}).get('challenges', []),

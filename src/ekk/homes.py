@@ -26,3 +26,11 @@ def cache_home():
     if sys.platform == 'darwin':
         return Path.home() / 'Library/Caches/EKK'
     return Path(os.environ.get('XDG_CACHE_HOME', Path.home()/'.cache')) / 'ekk'
+
+
+def release_home():
+    """The installer's release directory beside the data home; `cli/current` names the active release.
+
+    Computed on every call, so a long-lived process follows the environment it is asked in.
+    """
+    return data_home().expanduser().resolve().parent / 'cli'

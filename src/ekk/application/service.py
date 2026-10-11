@@ -8,6 +8,7 @@ from collections import OrderedDict
 from copy import deepcopy
 from pathlib import PurePosixPath
 from ekk.model import Conflict, validate_envelope, validate_reference, digest, new_id
+from .errors import RequestError, unknown_id
 
 CONTROL = ('.ekk/realm.yaml', '.ekk/governance.yaml', '.ekk/packs.lock.yaml')
 KINDS = {'context','note','source','observation','claim','question','decision','policy','action','outcome'}
@@ -35,6 +36,26 @@ def acceptance_statement(value):
         if name in value and (not isinstance(value[name], str) or len(value[name]) > limit):
             raise ValueError(f'statement.{name} must be text of at most {limit} characters')
     return dict(value)
+
+
+class AcceptanceRefused(RequestError):
+    """A refused acceptance by ID (RealmService.accept_current), naming the caller's ``option`` (``--id`` by default).
+
+    ``reason`` qualifies predecessor_blocks: unaccepted, not_acceptable_kind,
+    not_current or other_scopes. No refusal offers a command naming more records:
+    only the owner can say whether their words cover them.
+    """
+
+    def __init__(self, message, *, refusal, record_ids=(), reason=None, option='--id'):
+        super().__init__(message, refusal=refusal, option=option, record_ids=record_ids)
+        self.reason = reason
+
+
+def acceptance_key(realm_id, scopes, reference, statement):
+    """The key of an acceptance given none: the same words for the same exact version
+    name the same write whenever they are repeated, so a retry replays its receipt."""
+    words = {key: value for key, value in statement.items() if key != 'at'}
+    return 'accept-' + digest(json.dumps([realm_id, sorted(scopes), reference, words], sort_keys=True, ensure_ascii=False).encode())[:40]
 
 class RecordVersions:
     """Which version of each record every published commit holds."""
@@ -433,6 +454,26 @@ class RealmService:
         return {'realm': realm_id, 'id': row['metadata']['id'],
                 'revision': row['metadata']['revision'], 'digest': 'sha256:' + row['digest']}
 
+    def _prefix_matches(self, records, policy, scopes, text):
+        if not isinstance(text, str) or len(text) < 8:
+            return []
+        def readable(row):
+            try: self._query_readable(row, records, policy, scopes); return True
+            except PermissionError: return False
+        return sorted(key for key, row in records.items()
+                      if key.startswith(text) and set(row['metadata']['scope']) <= set(scopes) and readable(row))
+
+    def readable_prefix_matches(self, scopes, text):
+        """Full IDs of the current records readable from ``scopes`` whose ID starts with ``text``.
+
+        The help an unknown ID gets: only for a text of at least 8 characters, and
+        never naming a record that a read from the selected contexts refuses. Read
+        permission is checked as for every query, the record and its dependency
+        closure inside the contexts; nothing is resolved.
+        """
+        _, _, policy, records = self._query_view(scopes)
+        return self._prefix_matches(records, policy, scopes, text)
+
     def list_contexts(self, scopes):
         """Describe only explicitly selected contexts, without exposing control files."""
         snapshot, realm, policy, records = self._query_view(scopes)
@@ -521,7 +562,7 @@ class RealmService:
         from .workspace import exact_reference
         reference = exact_reference(reference)
         if type(max_bytes) is not int or not 1 <= max_bytes <= 1048576:
-            raise ValueError('invalid record byte limit')
+            raise RequestError('invalid record byte limit', option='max_bytes')
         snapshot, realm, policy, records = self._query_view(scopes)
         if reference['realm'] != realm['id']:
             raise PermissionError('reference belongs to another realm')
@@ -531,7 +572,7 @@ class RealmService:
         if digest(raw) != row['digest']:
             raise ValueError('record bytes digest mismatch')
         if len(raw) > max_bytes:
-            raise ValueError('record exceeds byte limit; increase max_bytes')
+            raise RequestError('record exceeds byte limit; increase max_bytes', option='max_bytes')
         return {'schema': 'ekk.record-read/0.1', 'reference': self._query_reference(realm['id'], row),
                 'snapshot': snapshot['revision'], 'record_snapshot': row['snapshot_revision'],
                 'path': row['path'], 'metadata': row['metadata'], 'body': row['body'],
@@ -696,6 +737,151 @@ class RealmService:
             raw = current['files'].get(f'{roots["receipts_root"]}/{digest(ref["id"].encode())}-{ref["digest"].removeprefix("sha256:")}.json')
             if raw: recorded = json.loads(raw).get('statement'); break
         return {**result, 'statement': recorded} if statement is not None or recorded is not None else result
+
+    def accept_current(self, scopes, record_ids, *, statement, idempotency_key=None, option='--id'):
+        """Accept the current version of each named decision or policy with the owner's statement.
+
+        One view resolves every named ID exactly and checks the whole set before
+        anything is written (AcceptanceRefused unless noted):
+        - an ID that names no current record is ``unknown_id``, naming the full ID of
+          a unique prefix within the selected contexts;
+        - a record outside the selected contexts is refused as for fetch (PermissionError);
+        - a record that is neither a decision nor a policy is ``not_a_decision``;
+        - a record replaced by a successor that is not named too is ``superseded_target``;
+        - a record replacing one that is unaccepted and not named, cannot be accepted,
+          is pinned at another version or lies in other contexts is ``predecessor_blocks``.
+
+        A chain is accepted by naming every unaccepted member: predecessors are
+        written first, one acceptance per record at the snapshot it leaves, so the
+        words are never copied onto a record the owner did not name. A record
+        already accepted at its current version is not written again; when every
+        named record is, nothing is written and the state is ``already_accepted``
+        with the statement its receipt holds. A write that meets a moved snapshot
+        re-resolves the view once and retries when every remaining reference is
+        unchanged and the checks pass; a changed record is ``target_changed``. A
+        failure after the first write carries ``accepted_so_far``.
+
+        ``idempotency_key`` keys the i-th record of the predecessor-first order as
+        KEY-i (i > 0). Without one, acceptance_key derives it from the exact version
+        and the statement without its time. ``option`` is how the caller names the
+        records, given as every refusal's option and in its message: ``--id`` on the
+        command line, a page mark for a review page.
+        """
+        from ekk.model import DirtyWorkingTree, IdempotencyConflict, RecoveryConflict
+        if not isinstance(record_ids, (list, tuple)) or not 1 <= len(record_ids) <= 32 or any(not isinstance(key, str) for key in record_ids):
+            raise RequestError(f'Name 1 to 32 records with {option}', option=option)
+        if len(set(record_ids)) != len(record_ids):
+            raise RequestError(f'Name each record once with {option}', option=option)
+        statement = acceptance_statement(statement)
+        record_ids = list(record_ids)
+        view = self._acceptance_view(scopes)
+        order = self._acceptance_order(scopes, record_ids, view, option)
+        snapshot, realm, _, records, accepted = view
+        refs = {key: self._query_reference(realm['id'], records[key]) for key in order}
+        expected, written, publications = snapshot['revision'], [], []
+        try:
+            for index, key in enumerate(order):
+                if key in accepted:
+                    continue
+                name = (f'{idempotency_key}-{index}' if index else idempotency_key) if idempotency_key else acceptance_key(realm['id'], scopes, refs[key], statement)
+                try:
+                    result = self.accept_records(scopes, [refs[key]], expected_snapshot=expected, idempotency_key=name, statement=statement)
+                except Conflict as exc:
+                    if isinstance(exc, (DirtyWorkingTree, IdempotencyConflict, RecoveryConflict)):
+                        raise
+                    view = self._acceptance_view(scopes)
+                    current, done = view[3], {ref['id'] for ref in written}
+                    changed = [k for k in order if k not in done and (k not in current or self._query_reference(realm['id'], current[k]) != refs[k])]
+                    if changed:
+                        raise AcceptanceRefused('Changed while being accepted: ' + '; '.join(
+                            f'{k} revision {refs[k]["revision"]} is now ' + (f'revision {current[k]["metadata"]["revision"]}' if k in current else 'removed')
+                            for k in changed) + '. Read it again; accept it only if the owner\'s words still apply.',
+                            refusal='target_changed', record_ids=changed, option=option) from exc
+                    self._acceptance_order(scopes, record_ids, view, option)
+                    accepted, expected = view[4], view[0]['revision']
+                    if key in accepted:
+                        continue
+                    result = self.accept_records(scopes, [refs[key]], expected_snapshot=expected, idempotency_key=name, statement=statement)
+                written.append(refs[key]); publications.append(result); expected = result['revision']
+        except Exception as exc:
+            if written:
+                exc.accepted_so_far = list(written)
+            raise
+        return {'state': 'accepted' if written else 'already_accepted', 'references': [refs[key] for key in order],
+                'written': written, 'statement': publications[0].get('statement') if publications else accepted[order[0]].get('statement'),
+                'snapshot': expected, 'publications': publications}
+
+    def _acceptance_view(self, scopes):
+        snapshot, realm, policy, records = self._query_view(scopes)
+        return snapshot, realm, policy, records, self._acceptances(snapshot, records)
+
+    def _acceptance_order(self, scopes, record_ids, view, option):
+        """accept_current's checks on one view; the named IDs, predecessors first."""
+        snapshot, _, policy, records, accepted = view
+        named = set(record_ids)
+        def readable(row):
+            try: self._query_readable(row, records, policy, scopes); return True
+            except PermissionError: return False
+        def target_id(ref):
+            item = {'id': ref} if isinstance(ref, str) else ref
+            return item.get('id', item.get('target'))
+        for key in record_ids:
+            row = records.get(key)
+            if row is None:
+                raise unknown_id(key, self._prefix_matches(records, policy, scopes, key), option)
+            self._query_readable(row, records, policy, scopes)
+            if row['metadata']['kind'] not in ('decision', 'policy'):
+                raise AcceptanceRefused(f'{key} is a {row["metadata"]["kind"]}; only a decision or a policy can be accepted',
+                                        refusal='not_a_decision', record_ids=[key], option=option)
+            self._authorized(policy, 'accept', row['metadata']['scope'])
+        # Successors as card_view sees them; only records that replace a named one are checked for readability.
+        replacing = {key for key, row in records.items() if any(target_id(ref) in named for ref in self._links(row['metadata'], 'supersedes'))}
+        successors, _, hidden, _, _ = self._supersession(snapshot, records, named | {key for key in replacing if readable(records[key])}, accepted)
+        for key in record_ids:
+            later = sorted(successors.get(key, set()) - named)
+            if key in hidden:
+                raise AcceptanceRefused(f'{key} is replaced by ' + (', '.join(later) + ' and by ' if later else '')
+                                        + 'a record outside the selected contexts; it cannot be accepted from them',
+                                        refusal='superseded_target', record_ids=later, option=option)
+            if later:
+                raise AcceptanceRefused(f'{key} is replaced by {", ".join(later)} and is not accepted alone. If the owner\'s words '
+                                        f'accept the replacement too, name every record of the chain with {option}; ask the owner otherwise',
+                                        refusal='superseded_target', record_ids=later, option=option)
+        predecessors = {}
+        for key in record_ids:
+            metadata = records[key]['metadata']
+            predecessors[key] = []
+            for ref in self._links(metadata, 'supersedes'):
+                target = self._reference(ref, records)
+                previous = target['metadata']
+                predecessors[key].append(previous['id'])
+                if key in accepted:
+                    continue
+                validate_reference(ref, pinned=True)
+                current = records.get(previous['id'])
+                reason = ('not_current' if current is None or current['digest'] != target['digest'] else
+                          'not_acceptable_kind' if previous['kind'] not in ('decision', 'policy') else
+                          'other_scopes' if set(previous['scope']) != set(metadata['scope']) else
+                          'unaccepted' if previous['id'] not in accepted and previous['id'] not in named else None)
+                if reason:
+                    detail = {'not_current': f'revision {previous["revision"]} of it, which is now '
+                                             + (f'revision {current["metadata"]["revision"]}' if current else 'removed'),
+                              'not_acceptable_kind': f'a {previous["kind"]}, which cannot be accepted; this runtime accepts a replacement only of an accepted decision or policy',
+                              'other_scopes': f'in contexts {", ".join(previous["scope"])}, while it lies in {", ".join(metadata["scope"])}',
+                              'unaccepted': f'unaccepted. If the owner\'s words accept it too, name it with {option} as well, and the chain '
+                                            'is accepted predecessors first; ask the owner otherwise'}[reason]
+                    raise AcceptanceRefused(f'{key} replaces {previous["id"]}: {detail} ({reason})', refusal='predecessor_blocks',
+                                            record_ids=[previous['id']], reason=reason, option=option)
+        order, seen = [], set()
+        def visit(key):
+            if key not in seen:
+                seen.add(key)
+                for previous in predecessors[key]:
+                    if previous in named: visit(previous)
+                order.append(key)
+        for key in record_ids:
+            visit(key)
+        return order
 
     def doctor(self, revision=None):
         snapshot = self.store.snapshot(revision)
@@ -1128,7 +1314,7 @@ class RealmService:
         action_requirements = selection == 'action_requirements'
         if action_requirements and task:
             raise ValueError('Action context uses explicit grounds, not discovery text')
-        if type(budget) is not int or budget<1:raise ValueError('budget must be a positive integer number of bytes')
+        if type(budget) is not int or budget<1:raise RequestError('budget must be a positive integer number of bytes',option='budget')
         snapshot = self.store.snapshot()
         realm,policy,packs,records = self._validate(snapshot)
         self._authorized(policy,'read',scopes)
@@ -1343,6 +1529,23 @@ class RealmService:
                 if not action_requirements:
                     if any(head not in selected for head in heads(key)): reading_unknowns.add('selected material is superseded; its successor did not fit the byte budget')
                     if key in hidden_successor: reading_unknowns.add('selected material has a successor outside the requested or authorized projection')
+            if m.get('work', {}).get('schema') == 'ekk.work/0.1':
+                current = records.get(m['id'])
+                row['historical'] = current is None or current['digest'] != r['digest']
+                if row['historical']:
+                    row['status_provenance'] = 'selected_historical_revision'
+                    row['navigation_warning'] = 'Displayed work status and next_step belong to the selected historical revision.'
+                    row['current_unavailable'] = True
+                    if current is not None:
+                        try:
+                            self._query_readable(current, records, policy, scopes)
+                        except (PermissionError, ValueError, KeyError, OSError):
+                            pass
+                        else:
+                            row['current_reference'] = self._query_reference(realm['id'], current)
+                            row['current_unavailable'] = False
+                else:
+                    row['status_provenance'] = 'selected_current_revision'
             result.append(row)
         if action_requirements:
             incomplete = bool(blocked or unknowns or reading_unknowns)

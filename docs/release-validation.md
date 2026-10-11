@@ -1,3 +1,45 @@
+# EKK 0.10.1 release validation
+
+The 0.10.1 public export (406 reviewed files) was prepared from the development
+source with `tools/prepare_release.py` against the hash-pinned 0.9.1 export. It
+also carries 0.10.0, which was installed locally but not published. Every Python
+file is byte-identical to the development source, with three exceptions:
+
+- Cyrillic string literals are written as `\u` escapes with an identical AST.
+- `src/ekk/observation.py` is an explicit translation: its comments are in
+  English, and its Cyrillic patterns are ordinary string literals with `\u`
+  escapes and an identical AST.
+- English edition files, `tests/test_public_english.py` among them, are reused
+  from earlier releases with their recorded provenance.
+
+Validation on Python 3.13.5:
+
+- The development source of the same runtime and tests passed the complete suite
+  through `tools/run_tests.py`: **740 tests in 58 jobs OK**. The suite includes the
+  migration of a 0.10.0 observer database, a frozen copy of the 0.10.0 store code
+  writing to the migrated schema, a frozen copy of the 0.10.0 review-page parser,
+  explicit expiry with counts, and the refusals of undeclared provenance.
+- The frozen export ran the complete suite from its own tree
+  (`tools/run_tests.py` from the export root): **741 tests in 59 jobs OK**, with
+  no failures and no reruns, under an unrelated load average between about 150
+  and 240. The extra job is the export's `tests/test_public_english.py`.
+- The loader fingerprint and the store verifier equal those of 0.9.1 and 0.10.0,
+  computed on the installed wheel, so activation needs no index rebuild or audit.
+- The wheel of the same source, installed like a release, gave output identical to
+  0.10.0 on 17 real read requests on two stores (entry, brief entry, fetch,
+  read-source and doctor), with every exit code 0 and both stores unchanged.
+- The wheel built from the export is byte-identical in its Python modules, packs
+  and schemas to the export (`finalize_artifacts.py`, `verification.json`).
+- Two independent read-only reviews of the export (private material and English
+  edition; release consistency) ran before publication. Their findings were
+  applied, and the export was prepared again.
+- No tests were skipped. The empirical study remains not run; no model or human
+  benefit is claimed.
+
+The runtime of the same bytes is installed locally; its state is in
+[releases/0.10.1/status.md](releases/0.10.1/status.md) and the
+[0.10.1 release notes](release-notes-0.10.1.md).
+
 # EKK 0.9.1 release validation
 
 The 0.9.1 public export (371 reviewed files) was prepared from the development

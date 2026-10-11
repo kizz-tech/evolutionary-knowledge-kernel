@@ -18,6 +18,22 @@ the owning source reference, asset index, byte offset and limit; base64 preserve
 bytes across binary data and UTF-8 boundaries. Historical source assets are read
 from the exact retained snapshot, not the current filesystem path.
 
+The CLI forms `fetch --id ID` and `read-source --id ID` read the current version
+of the record with exactly that ID; a prefix is never resolved. An unknown ID is
+refused as `{error: invalid_request, message, refusal: unknown_id, option}`. When
+the value has at least 8 characters and starts exactly one record that a read
+from the selected contexts may return (the record and its dependencies lie within
+them), `record_ids` names that full ID and `next` is the same command with only
+that value replaced. Several such records are counted, never listed, and a record
+those contexts cannot read is never named. Every `invalid_request` names the
+option or request field at fault and exits with code 2. In 0.10.1
+`invalid_request` covers the option and JSON-input checks, accept and decide
+declarations, unknown IDs, the context budget and the fetch byte limit. Other
+validation errors, including search limits and modes and read-source byte
+ranges, still report `invalid_format` until 0.11, as malformed records and files
+do. Until journal v2 the operation journal records a request error as
+`invalid_format` at stage `request`.
+
 `accept` is separate from writing. Supply exact `references`, an
 `expected_snapshot`, and an `idempotency_key`. The application validates the pinned
 bytes and creates the ordinary canonical acceptance receipt under current

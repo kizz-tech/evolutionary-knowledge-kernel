@@ -4,9 +4,11 @@ Pure and dependency-free: the host hook imports this module on every prompt and
 turn end, and the field-use study applies the same rules to transcripts. A rule
 change is a new version; comparisons name the version they used.
 """
+import collections
 import re
 
 CORRECTION_RULE = 'ekk.correction-rule/1'
+CORRECTION_RULE_2 = 'ekk.correction-rule/2'
 REDACTION_RULE = 'ekk.redaction-rule/2'
 
 MAX_EVENT_BYTES = 2 * 1024 * 1024
@@ -40,10 +42,40 @@ _CUES = tuple(re.compile(pattern, _FLAGS) for pattern in (
     '\u0437\u0430\u0447\u0435\u043c|\u043d\u0430\u0445\u0443\u044f|\u043f\u043e\u0447\u0435\u043c\u0443 \u0442\u044b|\u043f\u043e\u0447\u0435\u043c\u0443 \u043d\u0435|\u0447\u0442\u043e \u0442\u044b (\u0441\u0434\u0435\u043b\u0430\u043b|\u0442\u0432\u043e\u0440\u0438\u0448\u044c)|\u0442\u044b (\u043d\u0435|\u0437\u0430\u0447\u0435\u043c|\u043e\u043f\u044f\u0442\u044c|\u0437\u0430\u0431\u044b\u043b\\w*|\u0443\u0431\u0440\u0430\u043b|\u0441\u043b\u043e\u043c\u0430\u043b)|why did you',
     '\u043a\u0440\u0438\u0432\u043e|\u043f\u043b\u043e\u0445\u043e|\u0443\u0436\u0430\u0441\u043d\\w+|\u0431\u0440\u0435\u0434\\w*|\u043d\u0435 \u043d\u0440\u0430\u0432\u0438\u0442\u0441\u044f|\u0441\u0442\u0440\u0430\u043d\u043d\u043e|\u0445\u0443\u0439\u043d\\w+|\u043f\u0438\u0437\u0434\\w+|\\b\u0431\u043b\u044f\\w*|\u0437\u0430\u0435\u0431\\w+',
 ))
-_SUPPORT_PASTE = re.compile('^[\\w.+-]+@|\xb7 @|Telegram \\d{6,}|^\u0414\u043e\u0431\u0440\u044b\u0439 (\u0434\u0435\u043d\u044c|\u0432\u0435\u0447\u0435\u0440)', _FLAGS)
+_SUPPORT_PASTE = re.compile('^[\\w.+-]+@|\u00b7 @|Telegram \\d{6,}|^\u0414\u043e\u0431\u0440\u044b\u0439 (\u0434\u0435\u043d\u044c|\u0432\u0435\u0447\u0435\u0440)', _FLAGS)
 _REPEAT = re.compile(
     '\u044f (\u0436\u0435 |\u0443\u0436\u0435 |\u0442\u0435\u0431\u0435 |\u043a\u0430\u043a |\u043e\u0431\u044b\u0447\u043d\u043e |\u0432\u0441\u0435\u0433\u0434\u0430 )*(\u0433\u043e\u0432\u043e\u0440\u0438\u043b|\u0433\u043e\u0432\u043e\u0440\u044e|\u043f\u0438\u0441\u0430\u043b|\u0441\u043a\u0430\u0437\u0430\u043b|\u043f\u0440\u043e\u0441\u0438\u043b)|\\d+\\s*(-?\u0438\u0439)? \u0440\u0430\u0437|\u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0440\u0430\u0437'
     '|\u043a\u0430\u0436\u0434\u044b\u0439 \u0440\u0430\u0437|\u043e\u043f\u044f\u0442\u044c|\u043f\u043e\u0432\u0442\u043e\u0440\u044e|\u0434\u043e \u0441\u0438\u0445 \u043f\u043e\u0440|\u0432\u0441[\u0435\u0451] \u0435\u0449[\u0435\u0451]|\u0437\u0430\u0431\u044b\u0432\u0430\\w+|\\bagain\\b|every time|\\bstill\\b', _FLAGS)
+
+# Rule 2 is rule 1 with three changes measured in the October 2026 practice check:
+# - more host texts that are not the owner's words: a whole turn from another agent
+#   session, the answer form of a question widget, a scheduled run; and the artifact
+#   view context, a block the host puts before the owner's own words;
+# - the second-person "you ... not" cue starts at a word boundary, so a word ending
+#   in the letters of the Russian "you" before "not" is not a cue;
+# - more repeat phrases, each ending on a word: "last time", "I did ask (you)"
+#   with a few words between, "how many more times", "yet again", "again".
+# Everything rule 1 excludes, rule 2 excludes too. The added block is anchored at the
+# start, so a prompt full of unclosed openings is still read in linear time.
+_INJECTED_2 = re.compile(
+    r'^\s*(<task-notification>|<command-name>|<command-message>|<local-command-|<system-reminder>|<bash-input>'
+    r'|<heartbeat>|\[Request interrupted|This session is being continued|Try again$|I hit my usage limit'
+    r'|<cross-session-message\b|<send_user_message_question_reply>|<scheduled-task\b)', _FLAGS)
+_BLOCKS_2 = _BLOCKS + (re.compile(r'\A\s*<artifact-view-context\b.*?</artifact-view-context>', re.DOTALL),)
+_CUES_2 = _CUES[:3] + (re.compile(
+    '\u0437\u0430\u0447\u0435\u043c|\u043d\u0430\u0445\u0443\u044f|\u043f\u043e\u0447\u0435\u043c\u0443 \u0442\u044b|\u043f\u043e\u0447\u0435\u043c\u0443 \u043d\u0435|\u0447\u0442\u043e \u0442\u044b (\u0441\u0434\u0435\u043b\u0430\u043b|\u0442\u0432\u043e\u0440\u0438\u0448\u044c)|\\b\u0442\u044b (\u043d\u0435|\u0437\u0430\u0447\u0435\u043c|\u043e\u043f\u044f\u0442\u044c|\u0437\u0430\u0431\u044b\u043b\\w*|\u0443\u0431\u0440\u0430\u043b|\u0441\u043b\u043e\u043c\u0430\u043b)|why did you',
+    _FLAGS),) + _CUES[4:]
+_REPEAT_2 = re.compile(
+    _REPEAT.pattern + '|\\b\u0432 \u043f\u0440\u043e?\u0448\\w{1,5} \u0440\u0430\u0437[\u0430\u044b]?\\b|\\b\u043a\u043e\u0442\u043e\u0440\u044b\u0439 \u0440\u0430\u0437\\b|\\b\u0441\u043d\u043e\u0432\u0430\\b'
+    '|\\b\u044f(?:,? (?:\u0436\u0435|\u0432\u0435\u0434\u044c|\u0443\u0436\u0435|\u0442\u0435\u0431\u0435|\u0442\u0435\u0431\u044f|\u0432\u0430\u043c|\u043a\u0430\u043a|\u043e\u0431\u044b\u0447\u043d\u043e|\u0432\u0441\u0435\u0433\u0434\u0430|\u0438\u0437\u043d\u0430\u0447\u0430\u043b\u044c\u043d\u043e|\u0437\u0430\u0440\u0430\u043d\u0435\u0435|\u0441\u0440\u0430\u0437\u0443))+,? '
+    '(?:\u0433\u043e\u0432\u043e\u0440\u0438\u043b|\u043f\u0438\u0441\u0430\u043b|\u0441\u043a\u0430\u0437\u0430\u043b|(?:\u043f\u043e)?\u043f\u0440\u043e\u0441\u0438\u043b|\u0441\u043a\u0438\u0434\u044b\u0432\u0430\u043b|\u043f\u0440\u0438\u0441\u044b\u043b\u0430\u043b|\u043e\u0431\u044a\u044f\u0441\u043d\u044f\u043b)'
+    '|\\b\u0441\u043a\u043e\u043b\u044c\u043a\u043e (?:\u0440\u0430\u0437 )?(?:\u043c\u043e\u0436\u043d\u043e|(?:\u043c\u043d\u0435 |\u0435\u0449[\u0435\u0451] )?(?:\u0442\u0435\u0431\u0435 |\u0442\u0435\u0431\u044f )?(?:\u043f\u043e\u0432\u0442\u043e\u0440\u044f\u0442\u044c|\u0433\u043e\u0432\u043e\u0440\u0438\u0442\u044c|\u043f\u0440\u043e\u0441\u0438\u0442\u044c|\u043f\u0438\u0441\u0430\u0442\u044c|\u043e\u0431\u044a\u044f\u0441\u043d\u044f\u0442\u044c))\\b', _FLAGS)
+
+CorrectionRule = collections.namedtuple('CorrectionRule', 'name injected blocks cues repeat')
+RULE_1 = CorrectionRule(CORRECTION_RULE, _INJECTED, _BLOCKS, _CUES, _REPEAT)
+RULE_2 = CorrectionRule(CORRECTION_RULE_2, _INJECTED_2, _BLOCKS_2, _CUES_2, _REPEAT_2)
+# Rule 1 gates comparisons with the September 2026 baseline; later rules are secondary series.
+CORRECTION_RULES = (RULE_1, RULE_2)
 
 # Credential shapes, most specific first. Each pattern is linear in the input.
 _SECRETS = (
@@ -83,28 +115,28 @@ def single_line(text, limit=MAX_TITLE_CHARS):
     return text if len(text) <= limit else text[:limit - 1].rstrip() + '…'
 
 
-def owner_text(prompt):
+def owner_text(prompt, rule=RULE_1):
     """The owner's own words from a host prompt, or '' when the turn is not the owner's."""
     if not isinstance(prompt, str):
         return ''
     marks = list(_REQUEST_MARK.finditer(prompt))
     text = prompt[marks[-1].end():] if marks else prompt
-    for block in _BLOCKS:
+    for block in rule.blocks:
         text = block.sub(' ', text)
     text = text.strip()
-    return '' if not text or _INJECTED.match(text) else text
+    return '' if not text or rule.injected.match(text) else text
 
 
-def is_correction(text):
+def is_correction(text, rule=RULE_1):
     """A short owner message with a correction cue; the caller checks that agent work preceded it."""
     if not text or len(text) > MAX_CORRECTION_CHARS or _SUPPORT_PASTE.search(text):
         return False
-    return any(cue.search(text) for cue in _CUES)
+    return any(cue.search(text) for cue in rule.cues)
 
 
-def is_repeat(text):
+def is_repeat(text, rule=RULE_1):
     """A correction that says the same thing was asked before."""
-    return bool(is_correction(text) and _REPEAT.search(text))
+    return bool(is_correction(text, rule) and rule.repeat.search(text))
 
 
 def bounded(text, limit):

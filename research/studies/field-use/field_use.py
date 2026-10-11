@@ -60,15 +60,16 @@ HOST_LABELS = {'claude-code': 'claude'}
 COLLECTOR_RULE = 'ekk.field-use-collector/1'
 RESULT_ID_RE = re.compile(r'"result_reference":\s*\{[^{}]*?' + DELIVERED_ID_RE.pattern)
 QUEUE_KEY_RE = re.compile(r'"key":\s*"([^"\\]+)"')
+RULES = {rule.name: rule for rule in observation.CORRECTION_RULES}
 
 
-def rule_digest():
-    """Digest of the content of the correction rule: a baseline is bound to the rule itself, not to its name."""
+def rule_digest(rule=observation.RULE_1):
+    """Digest of the content of a correction rule: a baseline is bound to the rule itself, not to its name."""
     def source(pattern):
         return [pattern.pattern, pattern.flags]
-    content = [observation.CORRECTION_RULE, COLLECTOR_RULE, observation.MAX_CORRECTION_CHARS,
-               [source(p) for p in observation._CUES], source(observation._REPEAT), source(observation._SUPPORT_PASTE),
-               source(observation._INJECTED), source(observation._REQUEST_MARK), [source(p) for p in observation._BLOCKS]]
+    content = [rule.name, COLLECTOR_RULE, observation.MAX_CORRECTION_CHARS,
+               [source(p) for p in rule.cues], source(rule.repeat), source(observation._SUPPORT_PASTE),
+               source(rule.injected), source(observation._REQUEST_MARK), [source(p) for p in rule.blocks]]
     return 'sha256:' + hashlib.sha256(json.dumps(content, ensure_ascii=False).encode()).hexdigest()
 
 
@@ -360,6 +361,11 @@ def new_session(host, key):
             '_root_cwd': False, '_owner': [], '_reports': [], '_all_reports': []}
 
 
+def later_owner_texts(prompt):
+    """The owner's words under each correction rule after rule 1, as (rule, text) pairs; '' where a rule excludes the turn."""
+    return tuple((rule.name, observation.owner_text(prompt, rule)) for rule in observation.CORRECTION_RULES[1:])
+
+
 def touch(session, stamp):
     if stamp:
         session['start'] = min(session['start'] or stamp, stamp)
@@ -371,11 +377,17 @@ def finish(session, rows, messages):
     owner, reports, all_reports = (sorted(session.pop(key)) for key in ('_owner', '_reports', '_all_reports'))
     session.pop('_root_cwd')
     first_report = reports[0][0] if reports else None
-    for stamp, text in owner:
+    for stamp, text, later in owner:
         after = first_report is not None and first_report < stamp
         fix = after and observation.is_correction(text)
+        # Owner turns are the ones rule 1 keeps; a later rule may exclude some of them and judges its own text.
+        rules = {}
+        for name, own in later:
+            second = after and observation.is_correction(own, RULES[name])
+            rules[name] = {'owner': bool(own), 'correction': second,
+                           'repeat': second and observation.is_repeat(own, RULES[name])}
         messages.append({'host': session['host'], 'session': session['session'], 'ts': stamp, 'after_report': after,
-                         'correction': fix, 'repeat': fix and observation.is_repeat(text)})
+                         'correction': fix, 'repeat': fix and observation.is_repeat(text), 'rules': rules})
     session['user_messages'] = len(owner)
     rows = sorted((r for r in rows if not r['help']), key=lambda r: r.get('ts') or '')
     squashed = [(stamp, text, squash(text)) for stamp, text in all_reports]
@@ -477,11 +489,11 @@ def scan_codex(patterns, since, until):
                 if item.get('type') == 'FileChange':
                     session['file_changes'] += item.get('status') == 'completed' and bool(item.get('changes'))
                 elif item.get('type') == 'UserMessage' and owner_thread:
-                    text = observation.owner_text('\n'.join(
-                        part.get('text') or '' for part in listed(item.get('content'))
-                        if isinstance(part, dict) and part.get('type') == 'text'))
+                    prompt = '\n'.join(part.get('text') or '' for part in listed(item.get('content'))
+                                       if isinstance(part, dict) and part.get('type') == 'text')
+                    text = observation.owner_text(prompt)
                     if text:
-                        session['_owner'].append((stamp, text))
+                        session['_owner'].append((stamp, text, later_owner_texts(prompt)))
                 elif item.get('type') == 'CommandExecution':
                     command = item.get('command')
                     command = str(command[-1]) if isinstance(command, list) and command else str(command)
@@ -593,14 +605,15 @@ def scan_claude(patterns, since, until):
                         or record.get('isCompactSummary') or 'toolUseResult' in record
                         or (record.get('origin') or {}).get('kind') not in (None, 'human')):
                     continue
-                text = observation.owner_text(claude_text(content))
+                prompt = claude_text(content)
+                text = observation.owner_text(prompt)
                 if text:
                     # The report the owner answers is the last finished assistant text before this prompt.
                     if candidate:
                         session['_reports'].append(candidate)
                         session['_all_reports'].append(candidate)
                         candidate = None
-                    session['_owner'].append((stamp, text))
+                    session['_owner'].append((stamp, text, later_owner_texts(prompt)))
         if candidate:
             session['_all_reports'].append(candidate)
             if not subagent:
@@ -647,6 +660,7 @@ def collect(args):
                                               'episode_format': EPISODE_FORMAT,
                                               'correction_rule': observation.CORRECTION_RULE,
                                               'correction_rule_digest': rule_digest(),
+                                              'correction_rules': {name: rule_digest(rule) for name, rule in RULES.items()},
                                               'created_at': dt.datetime.now(dt.timezone.utc).isoformat()}, indent=2))
     os.chmod(out / 'run.json', 0o600)
     return sessions, episodes
@@ -747,8 +761,25 @@ def iso_week(stamp):
     return f'{year}-W{week:02d}'
 
 
-def corrections(messages, since=None, until=None, rule=None):
-    """Counts only: owner messages after agent work, corrections and repeated corrections under the frozen rule."""
+def flags(message, rule, primary):
+    """(owner, correction, repeat) of one owner message.
+
+    The row's own fields hold the rule the run was collected under (``primary``, from its run.json);
+    a later rule's flags are under 'rules'.
+    """
+    if rule == primary:
+        return True, message['correction'], message['repeat']
+    row = message['rules'][rule]
+    return row['owner'], row['correction'], row['repeat']
+
+
+def corrections(messages, since=None, until=None, rule=None, primary=None):
+    """Counts only: owner messages after agent work, corrections and repeated corrections under one frozen rule.
+
+    ``primary`` is the rule the run recorded as its own (default: this code's rule 1); ``rule`` defaults to it.
+    """
+    primary = primary or observation.CORRECTION_RULE
+    rule = rule or primary
     def blank():
         return {'owner_messages': 0, 'owner_messages_after_report': 0, 'corrections': 0, 'repeated_corrections': 0}
     rows, hosts, projects, total = (collections.defaultdict(blank), collections.defaultdict(blank),
@@ -756,13 +787,16 @@ def corrections(messages, since=None, until=None, rule=None):
     for m in messages:
         if not m.get('ts') or not in_period(m['ts'][:10], since, until):
             continue
+        owner, fix, repeat = flags(m, rule, primary)
+        if not owner:
+            continue
         project = m['project'] if m.get('bound') else UNBOUND
         for row in (rows[(m['host'], project, iso_week(m['ts']))], hosts[m['host']], projects[project], total):
             row['owner_messages'] += 1
             row['owner_messages_after_report'] += bool(m['after_report'])
-            row['corrections'] += bool(m['correction'])
-            row['repeated_corrections'] += bool(m['repeat'])
-    return {'rule': rule or observation.CORRECTION_RULE,
+            row['corrections'] += bool(fix)
+            row['repeated_corrections'] += bool(repeat)
+    return {'rule': rule,
             'denominator': 'owner_messages_after_report: owner messages that follow at least one agent report in the session',
             'total': total, 'by_host': dict(sorted(hosts.items())),
             'by_project': dict(sorted(projects.items(), key=lambda kv: (-kv[1]['corrections'], kv[0]))),
@@ -770,12 +804,22 @@ def corrections(messages, since=None, until=None, rule=None):
                                      for (host, project, week), row in sorted(rows.items())]}
 
 
+def baseline_name(rule):
+    """Rule 1 keeps the file name its frozen September baseline has; a later rule gets its own file."""
+    if rule == observation.CORRECTION_RULE:
+        return 'corrections-baseline.json'
+    return 'corrections-baseline-' + rule.removeprefix('ekk.').replace('/', '-') + '.json'
+
+
 def baseline(args):
     """Freeze correction counts for a fixed period, so that later comparisons use unchanged numbers."""
     run = Path(args.out).expanduser()
     if not (args.since and args.until):
         raise SystemExit('baseline needs --since and --until')
-    target = run / 'corrections-baseline.json'
+    name = getattr(args, 'rule', None) or observation.CORRECTION_RULE
+    if name not in RULES:
+        raise SystemExit(f'unknown correction rule {name}; known: {", ".join(RULES)}')
+    target = run / baseline_name(name)
     if target.exists():
         raise SystemExit(f'{target} exists and is frozen; write a new baseline into another run directory')
     collected = json.loads((run / 'run.json').read_text())
@@ -788,13 +832,18 @@ def baseline(args):
     if args.until >= collected_day:
         raise SystemExit('the baseline period was still open when the run was collected; '
                          'end it before the UTC day of collection')
+    # Owner turns are collected under rule 1, so every rule's counts also depend on rule 1's content.
     if (collected.get('correction_rule') != observation.CORRECTION_RULE
-            or collected.get('correction_rule_digest') != rule_digest()):
+            or collected.get('correction_rule_digest') != rule_digest()
+            or (name != observation.CORRECTION_RULE
+                and (collected.get('correction_rules') or {}).get(name) != rule_digest(RULES[name]))):
         raise SystemExit('the run was collected under another correction rule (name or content); collect again')
+    turns = {} if name == observation.CORRECTION_RULE else {
+        'owner_turn_rule': observation.CORRECTION_RULE, 'owner_turn_rule_digest': rule_digest()}
     result = {'schema': 'ekk.field-use-corrections-baseline/0.1', 'since': args.since, 'until': args.until,
               'created_at': dt.datetime.now(dt.timezone.utc).isoformat(),
-              'collected_at': collected['created_at'], 'rule_digest': rule_digest(),
-              **corrections(read_jsonl(run / 'messages.jsonl'), args.since, args.until)}
+              'collected_at': collected['created_at'], 'rule_digest': rule_digest(RULES[name]), **turns,
+              **corrections(read_jsonl(run / 'messages.jsonl'), args.since, args.until, name)}
     target.write_text(json.dumps(result, ensure_ascii=False, indent=2))
     os.chmod(target, 0o600)
     return result
@@ -853,7 +902,7 @@ def report(args, sessions=None, episodes=None):
     result['retain_receipts'] = dict(collections.Counter(
         f"{e['op']}:{e['outcome']}" for e in real if e.get('outcome')).most_common())
     if (run / 'messages.jsonl').is_file():
-        result['corrections'] = {**corrections(read_jsonl(run / 'messages.jsonl'), rule=rule),
+        result['corrections'] = {**corrections(read_jsonl(run / 'messages.jsonl'), rule=rule, primary=rule),
                                  'rule_matches_code': rule_current}
     result['entry_use'] = entry_use([e for e in real if e['op'] == 'enter'])
     # Adoption
@@ -1107,31 +1156,6 @@ def tasks_by_project(run):
     return stores
 
 
-def seed_task_terms(args):
-    """Give the runtime the task terms of past entries, so query weights start from real work."""
-    from ekk.adapters.experience_store import ExperienceStore
-    from ekk.adapters.local_profile import binding
-    from ekk.application.discovery import content_terms
-    store = ExperienceStore()
-    seeded = {}
-    try:
-        for project, data in tasks_by_project(Path(args.out).expanduser()).items():
-            try:
-                document = binding(Path(os.path.expanduser(project)))[1]
-                realm = document['bindings'][0]['realm_id'] if len(document['bindings']) == 1 else None
-            except (TypeError, ValueError, OSError, KeyError, IndexError):
-                realm = None
-            if not realm:
-                continue
-            for task in sorted(data['tasks']):
-                store.observe_task(realm, content_terms(task), task)
-            seeded[realm] = store.task_terms(realm)[0]
-    finally:
-        store.close()
-    print(json.dumps({'task_terms_by_realm': seeded}))
-    return seeded
-
-
 def bench(args):
     run = Path(args.out).expanduser()
     stores = tasks_by_project(run)
@@ -1362,11 +1386,12 @@ def compare(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('command', choices=['collect', 'report', 'bench', 'run', 'latency', 'compare', 'seed-task-terms', 'baseline'])
+    parser.add_argument('command', choices=['collect', 'report', 'bench', 'run', 'latency', 'compare', 'baseline'])
     parser.add_argument('--out', default=str(data_home().parent / 'evaluation/field-use' /
                                               dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')))
     parser.add_argument('--since')
     parser.add_argument('--until')
+    parser.add_argument('--rule', help='baseline: correction rule to freeze (default: ekk.correction-rule/1)')
     parser.add_argument('--codex', action='append', help='Glob of Codex session files (repeatable)')
     parser.add_argument('--claude', action='append', help='Glob of Claude Code transcript files (repeatable)')
     parser.add_argument('--journal', help='EKK operation journal path')
@@ -1392,11 +1417,10 @@ def main(argv=None):
         return latency(args)
     if args.command == 'compare':
         return compare(args)
-    if args.command == 'seed-task-terms':
-        return seed_task_terms(args)
     if args.command == 'baseline':
         baseline(args)
-        print(json.dumps({'output': str(Path(args.out).expanduser() / 'corrections-baseline.json')}))
+        name = baseline_name(args.rule or observation.CORRECTION_RULE)
+        print(json.dumps({'output': str(Path(args.out).expanduser() / name)}))
         return
     sessions = episodes = None
     if args.command in ('collect', 'run'):
